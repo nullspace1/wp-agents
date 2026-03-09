@@ -1,21 +1,25 @@
 from __future__ import annotations
 
-from typing import Callable, Generic
+from typing import Callable, Generic, TYPE_CHECKING
 
 from src.model.parameter import ParameterTemplate
-from src.model.resource import Resource
-from src.model.user import User
 from src.model.types import D
+
+if TYPE_CHECKING:
+    from src.model.resource import Resource
+    from src.model.agent import Agent
+
+
 class Operation(Generic[D]):
     
-    def __init__(self, operation : Callable[['Resource[D]','User', dict[str, str]], dict[str,str]],
+    def __init__(self, operation : Callable[['Resource[D]','Agent', dict[str, str]], dict[str,str]],
                  param_templates : list[ParameterTemplate],
                  description : str = ""):
         self.operation = operation
         self.param_templates = param_templates
         self.description = description
         
-    def execute(self, resource : 'Resource[D]', user : 'User', params : dict[str, str]) -> dict[str, str]:
+    def execute(self, resource : 'Resource[D]', agent : 'Agent', params : dict[str, str]) -> dict[str, str]:
         for template in self.param_templates:
             if template.required and template.name not in params:
                 raise ValueError(f"Required parameter {template.name} is missing.")
@@ -28,4 +32,4 @@ class Operation(Generic[D]):
             if param_name not in template_names:
                 raise ValueError(f"Parameter {param_name} is not valid for this operation.")
 
-        return self.operation(resource, user, params)
+        return self.operation(resource, agent, params)

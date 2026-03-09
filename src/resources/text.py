@@ -2,30 +2,32 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.model.resource import Resource, PermissionLevel
+from src.model.resource import Resource
+from src.model.permission_level import PermissionLevel
 from src.model.operation import Operation
 from src.model.parameter import ParameterTemplate
-from src.model.user import Group, User
+from src.model.agent import Agent
+from src.model.group import Group
 
 
-def get(resource : Resource[str], user : User, params : dict[str, Any] | None = None) -> dict[str, str]:
+def get(resource : Resource[str], agent : Agent, params : dict[str, Any] | None = None) -> dict[str, str]:
     return {
     "content": resource.data or ""}
 
-def patch(resource : Resource[str], user : User, params : dict[str, Any]) -> dict[str, str]:
+def patch(resource : Resource[str], agent : Agent, params : dict[str, Any]) -> dict[str, str]:
     if not resource.data:
         resource.data = ""
     resource.data = params.get("content", "")
     return {"content": resource.data or ""}
 
-def delete(resource : Resource[str], user : User, params : dict[str, Any]) -> dict[str, str]:
+def delete(resource : Resource[str], agent : Agent, params : dict[str, Any]) -> dict[str, str]:
     resource.data = ""
     return {"status": "content deleted"}
 
 
 def text(
-    user : User,
-    group : Group, 
+    agent : Agent,
+    group : Group | None, 
     user_permissions : PermissionLevel, 
     group_permissions : PermissionLevel, 
     other_permissions : PermissionLevel,
@@ -33,7 +35,7 @@ def text(
     text : str
     ) -> Resource[str]:
     return Resource[str](
-        owner=user,
+        owner=agent,
         group=group,
         type="text",
         name="text",

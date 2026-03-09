@@ -2,27 +2,31 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 import datetime
-from typing import Any, Generic
+from typing import Any, Generic, TYPE_CHECKING
 from src.model.enums import  OperationType, Status
 from src.model.operation import Operation
-from src.model.resource import Resource
-from src.model.user import User
 from src.model.types import D
+
+if TYPE_CHECKING:
+    from src.model.resource import Resource
+    from src.model.agent import Agent
 
 class Event(Generic[D]):
     
-    def __init__(self, resource : Resource[D], operation : Operation[D], operation_type : OperationType, status : Status, output : Any, parameters : dict[str, Any], user : 'User', exception : Exception | None = None, timestamp : datetime.datetime | None = None):
+    def __init__(self, resource : Resource[D], operation : Operation[D], operation_type : OperationType, status : Status, output : Any, parameters : dict[str, Any], agent : 'Agent', exception : Exception | None = None, timestamp : datetime.datetime | None = None):
         self.resource = resource
         self.operation = operation
         self.operation_type = operation_type
         self.status = status
         self.parameters = parameters
-        self.user = user
+        self.agent = agent
         self.output = output
         self.timestamp = timestamp or datetime.datetime.now()
         self.exception = exception
+        
     def __str__(self) -> str:
-        return f"{self.timestamp.isoformat()} - {self.user.name} performed {self.operation_type.name} on {self.resource.name} with status {self.status.name}. Parameters: {self.parameters}. Output: {self.output}"
+        resource_view = self.resource.view(self.agent)
+        return f"{self.timestamp.isoformat()} - {self.agent.name} performed {self.operation_type.name} on {resource_view['name']} with status {self.status.name}. Parameters: {self.parameters}. Output: {self.output}"
 
 
 class EventListener(ABC, Generic[D]):
