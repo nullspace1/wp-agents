@@ -90,7 +90,7 @@ def group_messaging(group: 'Group') -> Resource[MessagingData]:
         group=group,
         type="group_messaging",
         name=f"{group.name}_messaging",
-        description=f"Inter-agent messaging for group {group.name}",
+        description=f"Inter-agent messaging for group {group.name}: {group.description}",
         user_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
         group_permissions=PermissionLevel(get=True, post=True, patch=True, delete=True),
         other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),

@@ -9,9 +9,10 @@ if TYPE_CHECKING:
 
 class Group:
     
-    def __init__(self, uuid : str, name : str):
+    def __init__(self, uuid : str, name : str, description : str):
         self.uuid = uuid
         self.name = name
+        self.description = description
         self.members : list['Agent'] = []
         self.messaging_resource : Optional['Resource[Any]'] = group_messaging(group=self)
         
@@ -20,4 +21,4 @@ class Group:
             self.members.append(agent)
             agent.data.post(agent, {"path": f"groups/{self.name}-{self.uuid}/messaging", "resource": self.messaging_resource})
             
-ADMIN = Group(uuid="admin", name="Admin")
+ADMIN = Group(uuid="admin", name="Admin", description="The admin group for the system. Has access to all resources")
