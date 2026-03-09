@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, TYPE_CHECKING, cast
+from typing import Any, TYPE_CHECKING
 import uuid
 
 from model.message import Message
+from resources.agent_response import agent_response
 from src.model.group import Group
 from src.model.permission_level import PermissionLevel
-from src.resources.folder import folder, sanitize_path
+from src.resources.folder import folder
 from src.resources.list import list_resource
 
 if TYPE_CHECKING:
@@ -35,61 +36,12 @@ class Agent:
             group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
             other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
         )
-        
-        for resource in mounted_resources or []:
-            self.mount("", resource)
-        
-        for group in self.groups:
-            group.add_member(self)
             
-        self.__setup__()
+        self.__setup__(mounted_resources)
             
     def message(self, message: str, agent : Agent | None = None) -> str:
-        if not self.provider:
-            return ""
+        return ""
 
-        context_entries: list[str] = []
-        for path in self.context_resources.data:
-            target_resource = self.__resolve_resource_by_path__(path)
-            if not target_resource:
-                continue
-            try:
-                metadata = target_resource.view(self)
-                context_entries.append(f"{path}: {metadata}")
-            except Exception:
-                continue
-
-        payload = message
-        if context_entries:
-            context_block = "\n".join(context_entries)
-            payload = f"[CONTEXT_RESOURCES]\n{context_block}\n[/CONTEXT_RESOURCES]\n\n{message}"
-
-        return self.provider.send_message(payload)
-
-    def __resolve_resource_by_path__(self, path: str) -> Resource[Any] | None:
-        segments = sanitize_path(path)
-        current_resource: Resource[Any] = self.data
-
-        for segment in segments:
-            if not isinstance(current_resource.data, list):
-                return None
-
-            next_resource = None
-            for child in cast(list[Resource[Any]], current_resource.data):
-                try:
-                    child_view = child.view(self)
-                except Exception:
-                    continue
-                if child_view["name"] == segment:
-                    next_resource = child
-                    break
-
-            if not next_resource:
-                return None
-
-            current_resource = next_resource
-
-        return current_resource
     
     def mount(self, path: str, resource: Resource[Any]):
         self.data.post(self, {
@@ -97,12 +49,12 @@ class Agent:
             "resource": resource
         })
     
-    def __setup__(self):
+    def __setup__(self, mounted_resources: list[Resource[Any]] | None = None):
         groups_folder = folder(
             agent=self,
             group=None,
             folder_name="groups",
-            description="Folder containing group messaging resources",
+            description="Folder containing all the available groups of agents to communicate with",
             user_permissions=PermissionLevel(get=True, post=False, patch=False, delete=False),
             group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
             other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
@@ -127,10 +79,18 @@ class Agent:
             other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
             initial_data=[],
         )
+        self.response  = agent_response(self) 
 
         self.mount("", groups_folder)
         self.mount("", self.context_resources)
-            
+        self.mount("", self.message_history)
+        self.mount("", self.response)
+        
+        for resource in mounted_resources or []:
+            self.mount("", resource)
+        
+        for group in self.groups:
+            group.add_member(self)
 
         
 

@@ -6,20 +6,21 @@ from src.model.parameter import ParameterTemplate
 from src.model.types import D
 
 if TYPE_CHECKING:
-    from src.model.resource import Resource, op_result
+    from src.model.resource import Resource
     from src.model.agent import Agent
+    from src.model.operation_result import OperationResult
 
 
 class Operation(Generic[D]):
     
-    def __init__(self, operation : Callable[['Resource[D]','Agent', dict[str, Any]], 'op_result'],
+    def __init__(self, operation : Callable[['Resource[D]','Agent', dict[str, Any]], 'OperationResult'],
                  param_templates : list[ParameterTemplate],
                  description : str = ""):
         self.operation = operation
         self.param_templates = param_templates
         self.description = description
         
-    def execute(self, resource : 'Resource[D]', agent : 'Agent', params : dict[str, Any]) -> 'op_result':
+    def execute(self, resource : 'Resource[D]', agent : 'Agent', params : dict[str, Any]) -> 'OperationResult':
         for template in self.param_templates:
             if template.required and template.name not in params:
                 raise ValueError(f"Required parameter {template.name} is missing.")

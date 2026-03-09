@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING, cast
 
-from src.model.resource import Resource, op_result
+from src.model.resource import Resource
 from src.model.permission_level import PermissionLevel
 from src.model.group import Group
 from src.model.operation import Operation
 from src.model.parameter import ParameterTemplate
 from src.model.enums import OperationType
+from src.model.operation_result import OperationResult, OperationStatus
 
 if TYPE_CHECKING:
     from src.model.agent import Agent
@@ -18,7 +19,7 @@ def sanitize_path(path: str) -> list[str]:
     parts = [p.strip() for p in parts if p.strip()]
     return parts
 
-def get(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[str, Any]) -> op_result:
+def get(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[str, Any]) -> OperationResult:
     path_str = params.get("path", "")
     path = sanitize_path(path_str) if path_str else []
     
@@ -26,8 +27,8 @@ def get(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[s
         if resource.data:
             visible_resources = [r for r in resource.data if r.verify(agent, OperationType.GET)]
             contents = ",\n".join([str(r.view(agent)) for r in visible_resources])
-            return {"contents": contents}
-        return {"contents": "empty"}
+            return {"status": OperationStatus.CONTINUE, "output": {"contents": contents}}
+        return {"status": OperationStatus.CONTINUE, "output": {"contents": "empty"}}
     
     target_name = path[0]
     
@@ -51,13 +52,13 @@ def get(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[s
     else:
         return target_resource.get(agent, {})
     
-def delete(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[str, Any]) -> op_result:
+def delete(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[str, Any]) -> OperationResult:
     path_str = params.get("path", "")
     path = sanitize_path(path_str) if path_str else []
     
     if not path:
         resource.data = []
-        return {"status": "folder cleared"}
+        return {"status": OperationStatus.CONTINUE, "output": {"status": "folder cleared"}}
     
     target_name = path[0]
     
@@ -81,9 +82,9 @@ def delete(resource : Resource[list[Resource[Any]]], agent : Agent, params : dic
     else:
         resource.data.remove(target_resource)
         resource_view = resource.view(agent)
-        return {"status": f"Resource '{target_name}' deleted from folder '{resource_view['name']}'"}
+        return {"status": OperationStatus.CONTINUE, "output": {"status": f"Resource '{target_name}' deleted from folder '{resource_view['name']}'"}}
 
-def post(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[str, Any]) -> op_result:
+def post(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[str, Any]) -> OperationResult:
     new_resource : Resource[Any] | None = cast(Resource[Any] | None, params.get("resource"))
     path_str = params.get("path", "")
     path = sanitize_path(path_str) if path_str else []
@@ -98,7 +99,7 @@ def post(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[
         resource.data.append(new_resource)
         new_view = new_resource.view(agent)
         resource_view = resource.view(agent)
-        return {"status": f"Resource '{new_view['name']}' added to folder '{resource_view['name']}'"}
+        return {"status": OperationStatus.CONTINUE, "output": {"status": f"Resource '{new_view['name']}' added to folder '{resource_view['name']}'"}}
 
     if new_resource:
         new_view = new_resource.view(agent)
@@ -172,7 +173,7 @@ def post(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[
     current_folder.data.append(new_resource)
     new_view = new_resource.view(agent)
     current_view = current_folder.view(agent)
-    return {"status": f"Resource '{new_view['name']}' added to folder '{current_view['name']}'"}
+    return {"status": OperationStatus.CONTINUE, "output": {"status": f"Resource '{new_view['name']}' added to folder '{current_view['name']}'"}}
 
 
 def folder(

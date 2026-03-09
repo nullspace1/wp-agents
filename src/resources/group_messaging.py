@@ -3,10 +3,11 @@ from __future__ import annotations
 import datetime
 from typing import Any, TYPE_CHECKING
 
-from src.model.resource import Resource, op_result
+from src.model.resource import Resource
 from src.model.permission_level import PermissionLevel
 from src.model.operation import Operation
 from src.model.parameter import ParameterTemplate
+from src.model.operation_result import OperationResult, OperationStatus
 
 if TYPE_CHECKING:
     from src.model.agent import Agent
@@ -20,22 +21,22 @@ class MessagingData:
         self.messages: list[dict[str, Any]] = []
 
 
-def get(resource: Resource[MessagingData], agent: Agent, params: dict[str, Any] | None = None) -> op_result:
+def get(resource: Resource[MessagingData], agent: Agent, params: dict[str, Any] | None = None) -> OperationResult:
     """Get all views from each group member"""
     if not resource.data or not resource.data.group:
-        return {"members": []}
+        return {"status": OperationStatus.CONTINUE, "output": {"members": []}}
     
-    member_info: list[op_result] = []
+    member_info: list[dict[str, Any]] = []
     for member in resource.data.group.members:
         member_info.append({
                 "name": member.name,
                 "description": member.description
             })
 
-    return {"agents": member_info}
+    return {"status": OperationStatus.CONTINUE, "output": {"agents": member_info}}
 
 
-def post(resource: Resource[MessagingData], agent: Agent, params: dict[str, Any]) -> op_result: 
+def post(resource: Resource[MessagingData], agent: Agent, params: dict[str, Any]) -> OperationResult: 
     """Post a message to a specific agent in the group"""
     uuid = params.get("uuid", "")
     message = params.get("message", "")
@@ -80,7 +81,7 @@ def post(resource: Resource[MessagingData], agent: Agent, params: dict[str, Any]
     if not is_async:
         result["response"] = response
     
-    return result
+    return {"status": OperationStatus.CONTINUE, "output": result}
 
 
 def group_messaging(group: 'Group') -> Resource[MessagingData]:

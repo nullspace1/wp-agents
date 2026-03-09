@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING, TypeVar, cast
 
-from src.model.resource import Resource, op_result
+from src.model.resource import Resource
 from src.model.permission_level import PermissionLevel
 from src.model.operation import Operation
 from src.model.parameter import ParameterTemplate
 from src.model.group import Group
+from src.model.operation_result import OperationResult, OperationStatus
 
 if TYPE_CHECKING:
     from src.model.agent import Agent
@@ -15,11 +16,11 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-def get(resource: Resource[list[T]], agent: Agent, params: dict[str, Any] | None = None) -> op_result:
+def get(resource: Resource[list[T]], agent: Agent, params: dict[str, Any] | None = None) -> OperationResult:
     index = (params or {}).get("index")
 
     if index is None:
-        return {"items": cast(Any, resource.data)}
+        return {"status": OperationStatus.CONTINUE, "output": {"items": cast(Any, resource.data)}}
 
     if not isinstance(index, int):
         raise ValueError("Parameter index must be of type int.")
@@ -27,16 +28,16 @@ def get(resource: Resource[list[T]], agent: Agent, params: dict[str, Any] | None
     if index < 0 or index >= len(resource.data):
         raise IndexError("Index out of range.")
 
-    return {"item": cast(Any, resource.data[index])}
+    return {"status": OperationStatus.CONTINUE, "output": {"item": cast(Any, resource.data[index])}}
 
 
-def post(resource: Resource[list[T]], agent: Agent, params: dict[str, Any]) -> op_result:
+def post(resource: Resource[list[T]], agent: Agent, params: dict[str, Any]) -> OperationResult:
     value = cast(T, params.get("value"))
     resource.data.append(value)
-    return {"status": "item appended"}
+    return {"status": OperationStatus.CONTINUE, "output": {"status": "item appended"}}
 
 
-def patch(resource: Resource[list[T]], agent: Agent, params: dict[str, Any]) -> op_result:
+def patch(resource: Resource[list[T]], agent: Agent, params: dict[str, Any]) -> OperationResult:
     index = params.get("index")
     value = cast(T, params.get("value"))
 
@@ -47,10 +48,10 @@ def patch(resource: Resource[list[T]], agent: Agent, params: dict[str, Any]) -> 
         raise IndexError("Index out of range.")
 
     resource.data.insert(index, value)
-    return {"status": "item inserted"}
+    return {"status": OperationStatus.CONTINUE, "output": {"status": "item inserted"}}
 
 
-def delete(resource: Resource[list[T]], agent: Agent, params: dict[str, Any] | None = None) -> op_result:
+def delete(resource: Resource[list[T]], agent: Agent, params: dict[str, Any] | None = None) -> OperationResult:
     index = (params or {}).get("index")
 
     if not isinstance(index, int):
@@ -60,7 +61,7 @@ def delete(resource: Resource[list[T]], agent: Agent, params: dict[str, Any] | N
         raise IndexError("Index out of range.")
 
     resource.data.pop(index)
-    return {"status": "item deleted"}
+    return {"status": OperationStatus.CONTINUE, "output": {"status": "item deleted"}}
 
 
 def list_resource(
