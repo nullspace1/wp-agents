@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from src.model.resource import Resource
-from src.model.permission_level import PermissionLevel
-from src.model.operation import Operation
-from src.model.parameter import ParameterTemplate
-from src.model.agent import Agent
-from src.model.group import Group
-from src.model.operation_result import OperationResult, OperationStatus
+from model.permission_level import PermissionLevel
+from model.operation import Operation
+from model.parameter import ParameterTemplate
+from model.operation_result import OperationResult, OperationStatus
+from model.resource import Resource
 
 
+if TYPE_CHECKING:
+    from model.agent import Agent
+    from model.group import Group
+    
+    
 def get(resource : Resource[str], agent : Agent, params : dict[str, Any] | None = None) -> OperationResult:
     return {"status": OperationStatus.CONTINUE, "output": {"content": resource.data or ""}}
 

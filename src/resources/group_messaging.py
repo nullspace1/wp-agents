@@ -3,16 +3,15 @@ from __future__ import annotations
 import datetime
 from typing import Any, TYPE_CHECKING, cast
 
-from src.model.resource import Resource
-from src.model.permission_level import PermissionLevel
-from src.model.operation import Operation
-from src.model.parameter import ParameterTemplate
-from src.model.operation_result import OperationResult, OperationStatus
+from model.permission_level import PermissionLevel
+from model.operation import Operation
+from model.parameter import ParameterTemplate
+from model.operation_result import OperationResult, OperationStatus
+from model.resource import Resource
 
 if TYPE_CHECKING:
-    from src.model.agent import Agent
-    from src.model.group import Group
-
+    from model.agent import Agent
+    from model.group import Group
 
 class MessagingData:
     """Data structure to hold group reference and messages"""
@@ -55,10 +54,8 @@ def post(resource: Resource[MessagingData], agent: Agent, params: dict[str, Any]
     if not target_agent:
         raise ValueError(f"Agent with uuid '{uuid}' not found in group '{resource.data.group.name}'")
     
-    # Send the message to the target agent
     response = "" if is_async else target_agent.message(message)
     
-    # Log the message exchange
     msg_entry = {
         "from": agent.name,
         "from_uuid": agent.uuid,

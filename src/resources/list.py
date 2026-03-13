@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING, TypeVar, cast
 
-from src.model.resource import Resource
-from src.model.permission_level import PermissionLevel
-from src.model.operation import Operation
-from src.model.parameter import ParameterTemplate
-from src.model.group import Group
-from src.model.operation_result import OperationResult, OperationStatus
+from model.resource import Resource
+from model.permission_level import PermissionLevel
+from model.operation import Operation
+from model.parameter import ParameterTemplate
+from model.group import Group
+from model.operation_result import OperationResult, OperationStatus
 
 if TYPE_CHECKING:
-    from src.model.agent import Agent
+    from model.agent import Agent
 
 
 T = TypeVar("T")

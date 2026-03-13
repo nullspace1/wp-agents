@@ -3,21 +3,6 @@
 from typing import TypedDict
 
 
-class PermissionsDict(TypedDict):
-    """Permissions for user, group, and other."""
-    get: bool
-    post: bool
-    patch: bool
-    delete: bool
-
-
-class ResourcePermissionsDict(TypedDict):
-    """Permissions breakdown by user, group, and other."""
-    user: PermissionsDict
-    group: PermissionsDict
-    other: PermissionsDict
-
-
 class ResourceViewDict(TypedDict):
     """Resource metadata returned by view method."""
     name: str
@@ -29,4 +14,4 @@ class ResourceViewDict(TypedDict):
     operations: dict[str, str]
     operation_timestamps: dict[str, str | None]
     last_error: str | None
-    permissions: ResourcePermissionsDict
+    permissions: dict[str, list[str]]

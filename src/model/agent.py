@@ -9,17 +9,18 @@ from typing import Any, TYPE_CHECKING, cast
 import uuid
 
 from model.enums import OperationType
+from model.group import ADMIN
 from model.message import Message
 from model.operation_result import OperationResult, OperationStatus
 from resources.text import text
 from resources.agent_response import send_agent_reply
-from src.model.group import Group
-from src.model.permission_level import PermissionLevel
-from src.resources.folder import folder
-from src.resources.list import list_resource
+from model.permission_level import PermissionLevel
+from resources.folder import folder
+from resources.list import list_resource
 
 if TYPE_CHECKING:
-    from src.model.resource import Resource
+    from model.resource import Resource
+    from model.group import Group
     
 
 class Agent:
@@ -39,9 +40,9 @@ class Agent:
         self.tool_usage_instructions = (
             'You may reason freely before issuing a command, but your reply MUST end with a command on its own line '
             'using EXACTLY the following format:\n\n'
-            '    <operation_type> <operation_name> <json_encoded_parameters>\n\n'
+            '    <operation_type> <resource_name> <json_encoded_parameters>\n\n'
             '- operation_type: one of "get", "post", "patch", or "delete".\n'
-            '- operation_name: the exact name of an operation available through the agent\'s mounted resources.\n'
+            '- resource_name: the exact name of a resource available through the agent\'s mounted resources. You may access resources nested within other resources by looking them with "/" separators.\n'
             '- json_encoded_parameters: a JSON-encoded dictionary of parameters. '
             'Use {{}} if no parameters are needed.\n\n'
             'The LAST line of every reply MUST be a valid command in this format. '
@@ -86,6 +87,9 @@ class Agent:
             "path": path,
             "resource": resource
         })
+        
+    def is_admin(self) -> bool:
+        return any(group == ADMIN for group in self.groups)
     
     def __setup__(self, mounted_resources: list[Resource[Any]] | None = None):
         groups_folder = folder(
@@ -112,7 +116,7 @@ class Agent:
             group=None,
             text="",
             resource_name="information",
-            description="A text resource that can be used to store any information the agent wants to keep track of. This can be used by the agent to keep track of important details, such as the user's preferences, or to store any other relevant information that the agent may want to refer to later.",
+            description="A text resource that can be used to store any information this agent wants to keep track of. This can be used by the agent to keep track of important details, such as the user's preferences, or to store any other relevant information that the agent may want to refer to later.",
             user_permissions=PermissionLevel(get=True, post=True, patch=True, delete=True),
             group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
             other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
@@ -123,7 +127,7 @@ class Agent:
             agent=self,
             group=None,
             folder_name="thoughts",
-            description="Folder containing the agent's reasoning steps, each stored as a text resource",
+            description="Folder containing this agent's reasoning steps, each stored as a text resource",
             user_permissions=PermissionLevel(get=True, post=False, patch=False, delete=False),
             group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
             other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
@@ -171,6 +175,7 @@ class Agent:
             if reasoning:
                 self.__save_thought__(reasoning)
             response = self.__parse_response__(raw_response)
+            
             result = self.__execute__(response.resource, response.operation, response.parameters)
 
             if result["status"] == OperationStatus.STOP:
@@ -191,7 +196,7 @@ class Agent:
             )
 
     def __build_prompt__(self, prompt: str) -> str:
-        return self.initial_context + "\n\n" + self.tool_usage_instructions + "\n\n" + self.__view_root__() + "\n\n" + prompt
+        return self.initial_context + "\n\n" + "You are agent " + self.name + "." + self.tool_usage_instructions + "\n\n" + "Agent's data:\n" + self.__view_root__() + "\n\n" + prompt
                  
     _COMMAND_RE = re.compile(
         r'(get|post|patch|delete)\s+(\S+)\s+(\{.*\})\s*$',
@@ -209,12 +214,14 @@ class Agent:
         )
 
     def __view_root__(self):
-        return str([d.view(agent=self) for d in self.data.data])
+        return json.dumps([d.view(agent=self) for d in self.data.data], indent=2, default=str)
     
     def __execute__(self, resource_path: str, operation_type : OperationType, parameters: dict[str, Any]) -> OperationResult:
         
-        resource : Resource[Any] = self.data.get(self, {"path": resource_path})["output"]
+        print(f"Executing operation: {operation_type} on resource path: {resource_path} with parameters: {parameters}")
         
+        resource : Resource[Any] = self.data.get(self, {"path": resource_path})["output"]
+             
         if operation_type == OperationType.GET:
             return resource.get(self, parameters)
         elif operation_type == OperationType.POST:

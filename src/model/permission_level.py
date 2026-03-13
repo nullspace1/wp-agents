@@ -1,7 +1,6 @@
 """Permission level management for resources."""
 
-from src.model.enums import OperationType
-from src.model.resource_types import PermissionsDict
+from model.enums import OperationType
 
 
 class PermissionLevel:
@@ -20,10 +19,5 @@ class PermissionLevel:
     def verify(self, operation : OperationType) -> bool:
         return self.permissions[operation]
     
-    def get_permissions(self) -> PermissionsDict:
-        return {
-            "get": self.permissions[OperationType.GET],
-            "post": self.permissions[OperationType.POST],
-            "patch": self.permissions[OperationType.PATCH],
-            "delete": self.permissions[OperationType.DELETE]
-        }
+    def get_permissions(self) -> list[str]:
+        return [op.value for op, allowed in self.permissions.items() if allowed]

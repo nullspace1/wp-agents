@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Any, Optional
 from resources.group_messaging import group_messaging
 
 if TYPE_CHECKING:
-    from src.model.agent import Agent
-    from src.model.resource import Resource
+    from model.agent import Agent
+    from model.resource import Resource
 
 class Group:
     

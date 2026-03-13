@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING, cast
 
-from src.model.resource import Resource
-from src.model.permission_level import PermissionLevel
-from src.model.group import Group
-from src.model.operation import Operation
-from src.model.parameter import ParameterTemplate
-from src.model.enums import OperationType
-from src.model.operation_result import OperationResult, OperationStatus
+from model.resource import Resource
+from model.permission_level import PermissionLevel
+from model.group import Group
+from model.operation import Operation
+from model.parameter import ParameterTemplate
+from model.enums import OperationType
+from model.operation_result import OperationResult, OperationStatus
 
 if TYPE_CHECKING:
-    from src.model.agent import Agent
+    from model.agent import Agent
 
 
 def sanitize_path(path: str) -> list[str]:
@@ -50,7 +50,7 @@ def get(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[s
         remaining_path = "/".join(path[1:])
         return target_resource.get(agent, {"path": remaining_path})
     else:
-        return target_resource.get(agent, {})
+        return {"status": OperationStatus.CONTINUE, "output": target_resource}
     
 def delete(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[str, Any]) -> OperationResult:
     path_str = params.get("path", "")
@@ -122,28 +122,31 @@ def post(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[
         if not next_resource:
             agent_group = agent.groups[0] if agent.groups else None
             resource_view = resource.view(agent)
+            user_permissions = resource_view["permissions"]["user"]
+            group_permissions = resource_view["permissions"]["group"]
+            other_permissions = resource_view["permissions"]["other"]
             next_resource = folder(
                 agent=agent,
                 group=agent_group,
                 folder_name=segment,
                 description=f"A folder resource named {segment} that can contain other resources",
                 user_permissions=PermissionLevel(
-                    get=resource_view["permissions"]["user"]["get"],
-                    post=resource_view["permissions"]["user"]["post"],
-                    patch=resource_view["permissions"]["user"]["patch"],
-                    delete=resource_view["permissions"]["user"]["delete"],
+                    get="get" in user_permissions,
+                    post="post" in user_permissions,
+                    patch="patch" in user_permissions,
+                    delete="delete" in user_permissions,
                 ),
                 group_permissions=PermissionLevel(
-                    get=resource_view["permissions"]["group"]["get"],
-                    post=resource_view["permissions"]["group"]["post"],
-                    patch=resource_view["permissions"]["group"]["patch"],
-                    delete=resource_view["permissions"]["group"]["delete"],
+                    get="get" in group_permissions,
+                    post="post" in group_permissions,
+                    patch="patch" in group_permissions,
+                    delete="delete" in group_permissions,
                 ),
                 other_permissions=PermissionLevel(
-                    get=resource_view["permissions"]["other"]["get"],
-                    post=resource_view["permissions"]["other"]["post"],
-                    patch=resource_view["permissions"]["other"]["patch"],
-                    delete=resource_view["permissions"]["other"]["delete"],
+                    get="get" in other_permissions,
+                    post="post" in other_permissions,
+                    patch="patch" in other_permissions,
+                    delete="delete" in other_permissions,
                 )
             )
             current_folder.data.append(next_resource)

@@ -3,14 +3,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import datetime
 from typing import Any, Generic, TYPE_CHECKING
-from src.model.enums import OperationType
-from src.model.operation import Operation
-from src.model.operation_result import OperationStatus
-from src.model.types import D
+from model.enums import OperationType
+from model.operation import Operation
+from model.operation_result import OperationStatus
+from model.types import D
 
 if TYPE_CHECKING:
-    from src.model.resource import Resource
-    from src.model.agent import Agent
+    from model.resource import Resource
+    from model.agent import Agent
 
 class Event(Generic[D]):
     

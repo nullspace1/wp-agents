@@ -3,17 +3,17 @@ from __future__ import annotations
 import datetime
 from typing import Any, Generic, TYPE_CHECKING, cast
 
-from src.model.enums import OperationType
-from src.model.group import ADMIN, Group
-from src.model.operation import Operation
-from src.model.permission_level import PermissionLevel
-from src.model.events import Event, EventEmitter
-from src.model.types import D
-from src.model.resource_types import ResourceViewDict
-from src.model.operation_result import OperationResult, OperationStatus
+from model.enums import OperationType
+from model.operation import Operation
+from model.permission_level import PermissionLevel
+from model.events import Event, EventEmitter
+from model.types import D
+from model.resource_types import ResourceViewDict
+from model.operation_result import OperationResult, OperationStatus
 
 if TYPE_CHECKING:
-    from src.model.agent import Agent
+    from model.agent import Agent
+    from model.group import Group
 
 class Resource(Generic[D], EventEmitter[D]):
     
@@ -216,16 +216,16 @@ class Resource(Generic[D], EventEmitter[D]):
         """View basic metadata about the resource.
         
         Provides a dictionary representation of the resource's metadata (e.g., name, type, description).
-        Requires VIEW permission. Emits a SUCCESS or FAILURE event upon completion.
+        Requires at least one of GET, POST, PATCH, or DELETE permissions. Emits a SUCCESS or FAILURE event upon completion.
         
         Args:
-            agent: The agent performing the operation. Must have VIEW permission.
+            agent: The agent performing the operation. Must have at least one of GET, POST, PATCH, or DELETE permissions.
         
         Returns:
             dict[str, Any]: A dictionary representation of the resource's metadata.
             
         Raises:
-            PermissionError: If the user does not have VIEW permission on this resource.
+            PermissionError: If the user does not have at least one of GET, POST, PATCH, or DELETE permissions on this resource.
         """
         if not self.__has_any_permissions__(agent):
             raise PermissionError("You do not have permission to view this resource.")
@@ -250,8 +250,9 @@ class Resource(Generic[D], EventEmitter[D]):
                 }
     
     def verify(self, agent : Agent, operation : OperationType) -> bool:
-        """Check if agent has permission for a specific operation on this resource.
+        """Check if agent has permission for a specific operation on this resource. 
         
+
         Args:
             agent: The agent to check permissions for.
             operation: The operation type to verify (GET, POST, PATCH, DELETE).
@@ -262,7 +263,7 @@ class Resource(Generic[D], EventEmitter[D]):
         return self.__verify_permissions__(agent, operation)
     
     def __verify_permissions__(self, agent : Agent, operation : OperationType) -> bool:
-        if ADMIN in agent.groups:
+        if agent.is_admin():
             return True
         if agent == self.__owner__:
             return self.__user_permissions__.verify(operation)
