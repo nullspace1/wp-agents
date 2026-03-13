@@ -21,7 +21,7 @@ def sanitize_path(path: str) -> list[str]:
     return parts
 
 def view_resource(resource: Resource[Any], agent: Agent) -> ResourceViewDict:
-    return cast(ResourceViewDict, resource.view(agent))
+    return resource.view_direct(agent)
 
 def get(resource : Resource[list[Resource[Any]]], agent : Agent, params : dict[str, Any]) -> OperationResult:
     path_str = params.get("path", "")

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Generic, TYPE_CHECKING
+from typing import Any, Generic, TYPE_CHECKING, cast
 
 from model.enums import OperationType
 from model.operation import Operation
@@ -252,6 +252,9 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
                     "other": self.__other_permissions__.get_permissions()
                     }
                 )
+        
+    def view_direct(self, agent : Agent) -> ResourceViewDict:
+        return cast(ResourceViewDict,self.view(agent))
 
     def __normalize_output__(self, output: Any) -> AgentViewable:
         if isinstance(output, AgentViewable):

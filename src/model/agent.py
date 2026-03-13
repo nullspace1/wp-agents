@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
 import datetime
 import json
 import re
 from typing import Any, TYPE_CHECKING, cast
 import uuid
 
+from model.agent_provider import AgentProvider
 from model.enums import OperationType
 from model.group import ADMIN
 from model.message import Message
 from model.operation_result import OperationResult, OperationStatus
+from model.response import Response
 from resources.text import text
 from resources.agent_response import send_agent_reply
 from model.permission_level import PermissionLevel
@@ -25,7 +25,14 @@ if TYPE_CHECKING:
 
 class Agent:
     
-    def __init__(self, name : str, description : str, provider : AgentProvider, initial_context : str = "", token_limit : int = 3000, groups : list[Group] | None = None,mounted_resources : list[Resource[Any]] | None = None):
+    def __init__(self, name : str, 
+                 description : str, 
+                 provider : AgentProvider, 
+                 initial_context : str = "", 
+                 tool_usage_instructions : str | None = None,
+                 token_limit : int = 3000,
+                 groups : list[Group] | None = None,
+                 mounted_resources : list[Resource[Any]] | None = None):
         
         self.uuid : str = str(uuid.uuid4())
         self.name : str = name
@@ -38,6 +45,7 @@ class Agent:
         self.current_conversation = ""
         self.token_limit = token_limit
         self.tool_usage_instructions = (
+            tool_usage_instructions or
             'You may reason freely before issuing a command, but your reply MUST end with a command on its own line '
             'using EXACTLY the following format:\n\n'
             '    <operation_type> <resource_name> <json_encoded_parameters>\n\n'
@@ -46,7 +54,6 @@ class Agent:
             '- json_encoded_parameters: a JSON-encoded dictionary of parameters. '
             'Use {{}} if no parameters are needed.\n\n'
             'The LAST line of every reply MUST be a valid command in this format. '
-            'Any text before it is treated as reasoning and stored as a text resource in the agent\'s data folder under the thoughts folder. '
             'Example — to reply to the user with "Hello, how can I help you?": '
             'post agent_response {{"message": "Hello, how can I help you?"}}'
         )
@@ -212,7 +219,7 @@ class Agent:
         )
 
     def __view_root__(self):
-        return self.__format_output__([resource.view(self) for resource in self.root.data]) if self.root.data else "empty"
+        return self.__format_output__([resource.view_direct(self) for resource in self.root.data]) if self.root.data else "empty"
     
     def __execute__(self, resource_path: str, operation_type : OperationType, parameters: dict[str, Any]) -> OperationResult:
         
@@ -228,61 +235,4 @@ class Agent:
             return resource.delete(self, parameters)
 
         raise ValueError(f"Unsupported operation type: {operation_type}")
-        
-        
-class AgentProvider(ABC):
-    
-    @abstractmethod
-    def send_message(self, message : str) -> str:
-        pass
-    
-    @abstractmethod
-    def count_tokens(self, message : str) -> int:
-        pass
-    
-    
-@dataclass(slots=True)
-class Response:
-    resource : str
-    operation : OperationType
-    parameters: dict[str, Any]
-        
-        
-class AgentBuilder:
-    
-    def __init__(self):
-        self.provider : AgentProvider
-        self.groups : list[Group] = []
-        self.mounts : list[Resource[Any]] = []
-        self.description : str
-    
-    def with_provider(self, provider : AgentProvider) -> 'AgentBuilder':
-        self.provider = provider
-        return self
-    
-    def with_groups(self, groups : list[Group]) -> 'AgentBuilder':
-        self.groups = groups
-        return self
-    
-    def with_mounted_resources(self, resources : list[Resource[Any]]) -> 'AgentBuilder':
-        self.mounts = resources
-        return self
-    
-    def with_description(self, description : str) -> 'AgentBuilder':
-        self.description = description
-        return self
-    
-    def with_name(self, name : str) -> 'AgentBuilder':
-        self.name = name
-        return self
-
-    def build(self) -> Agent:
-        agent = Agent(
-            name=self.name,
-            provider=self.provider,
-            description=self.description,
-            groups=self.groups,
-            mounted_resources=self.mounts
-        )
-        return agent
         
