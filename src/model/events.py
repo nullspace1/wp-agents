@@ -26,7 +26,7 @@ class Event(Generic[D]):
         self.exception = exception
         
     def __str__(self) -> str:
-        resource_view = self.resource.view_direct(self.agent)
+        resource_view = self.resource.retrieve_agent_view(self.agent)
         return f"{self.timestamp.isoformat()} - {self.agent.name} performed {self.operation_type.name} on {resource_view['name']} with status {self.status.name}. Parameters: {self.parameters}. Output: {self.output}"
 
 

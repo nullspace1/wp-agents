@@ -3,18 +3,19 @@ from __future__ import annotations
 import datetime
 import json
 import re
-from typing import Any, TYPE_CHECKING, cast
+from typing import Any, TYPE_CHECKING
 import uuid
 
 from model.agent_provider import AgentProvider
 from model.enums import OperationType
+from model.file_system import FileSystem
 from model.group import ADMIN
 from model.message import Message
 from model.operation_result import OperationResult, OperationStatus
+from model.permission_level import PermissionLevel
 from model.response import Response
 from resources.text import text
 from resources.agent_response import send_agent_reply
-from model.permission_level import PermissionLevel
 from resources.folder import folder
 from resources.list import list_resource
 
@@ -58,15 +59,7 @@ class Agent:
             'post agent_response {{"message": "Hello, how can I help you?"}}'
         )
         
-        self.root = folder(
-            agent=self,
-            group=None,
-            folder_name=f"{self.name}_data",
-            description=f"Data folder for agent {self.name}",
-            user_permissions=PermissionLevel(get=True, post=True, patch=True, delete=True),
-            group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-            other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-        )
+        self.root = FileSystem(root_resources=[])
             
         self.__setup__(mounted_resources)
             
@@ -83,18 +76,10 @@ class Agent:
         return response
 
     
-    def mount(self, path: str, resource: Resource[Any]):
-        self.root.post(self, {
-            "path": path,
-            "resource": resource
-        })
+    def mount(self, resource: Resource[Any]):
+        self.root.mount(resource)
         
-    def unmount(self, path: str, resource: Resource[Any]):
-        self.root.delete(self, {
-            "path": path,
-            "resource": resource
-        })
-        
+
     def is_admin(self) -> bool:
         return any(group == ADMIN for group in self.groups)
     
@@ -140,12 +125,12 @@ class Agent:
             other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
         )
 
-        self.mount("", groups_folder)
-        self.mount("", thoughts_folder)
-        self.mount("", self.message_history)
-        self.mount("", self.agent_reply)
+        self.mount(groups_folder)
+        self.mount(thoughts_folder)
+        self.mount(self.message_history)
+        self.mount(self.agent_reply)
         for resource in mounted_resources or []:
-            self.mount("", resource)
+            self.mount(resource)
         
         for group in self.groups:
             group.add_member(self)
@@ -168,7 +153,7 @@ class Agent:
             other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
             text=reasoning,
         )
-        self.root.post(self, {"path": "thoughts", "resource": thought})
+        self.root.get_resource(self, "thoughts").post(self, {"resource": thought})
 
     def __format_output__(self, output: Any, indent: int = 2) -> str:
         return json.dumps(output, indent=indent, default=str)
@@ -219,11 +204,11 @@ class Agent:
         )
 
     def __view_root__(self):
-        return self.__format_output__([resource.view_direct(self) for resource in self.root.data]) if self.root.data else "empty"
+        return self.__format_output__([resource.retrieve_agent_view(self) for resource in self.root.root]) if self.root.root else "empty"
     
     def __execute__(self, resource_path: str, operation_type : OperationType, parameters: dict[str, Any]) -> OperationResult:
         
-        resource : Resource[Any] = cast(Resource[Any], self.root.get(self, {"path": resource_path})["output"])
+        resource = self.root.get_resource(self, resource_path)
         
         if operation_type == OperationType.GET:
             return resource.get(self, parameters)

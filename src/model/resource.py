@@ -253,20 +253,9 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
                     }
                 )
         
-    def view_direct(self, agent : Agent) -> ResourceViewDict:
+    def retrieve_agent_view(self, agent : Agent) -> ResourceViewDict:
         return cast(ResourceViewDict,self.view(agent))
-
-    def __normalize_output__(self, output: Any) -> AgentViewable:
-        if isinstance(output, AgentViewable):
-            return output
-        return AgentViewableValue(output)
-
-    def __normalize_result__(self, result: OperationResult) -> OperationResult:
-        return {
-            "status": result["status"],
-            "output": self.__normalize_output__(result["output"]),
-        }
-
+    
     def verify(self, agent : Agent, operation : OperationType) -> bool:
         """Check if agent has permission for a specific operation on this resource. 
         
@@ -279,6 +268,17 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
             bool: True if the agent has permission for the operation, False otherwise.
         """
         return self.__verify_permissions__(agent, operation)
+
+    def __normalize_output__(self, output: Any) -> AgentViewable:
+        if isinstance(output, AgentViewable):
+            return output
+        return AgentViewableValue(output)
+
+    def __normalize_result__(self, result: OperationResult) -> OperationResult:
+        return {
+            "status": result["status"],
+            "output": self.__normalize_output__(result["output"]),
+        }
     
     def __verify_permissions__(self, agent : Agent, operation : OperationType) -> bool:
         if agent.is_admin():
