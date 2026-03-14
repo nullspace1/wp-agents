@@ -29,7 +29,6 @@ class AgentViewable(ABC):
 
 
 class AgentViewableValue(AgentViewable):
-    """Wrap a value into an AgentViewable with JSON-like output."""
 
     def __init__(self, value: Any) -> None:
         self.value = value
