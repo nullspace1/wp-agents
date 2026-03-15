@@ -23,12 +23,12 @@ class API(AgentViewable):
         self.resources.add(resource)
         self.__update_path_graph__(agent, resource)
 
-    def get(self, agent : Agent, path : str) -> Resource[Any] | None:
+    def get(self, agent : Agent, path : str) -> Resource[Any]:
         for resource in self.resources:
             view : JsonLike | None = resource.view(agent)
             if view and view['name'] == path:
                 return resource
-        return None
+        raise ValueError(f"Resource {path} not found in API {self.name} or agent {agent.get_full_name()} does not have access to it.")
 
     def search(self, agent : Agent, query : str, depth : int = 0, root_node : APINode | None = None) -> JsonLike:
         
@@ -40,25 +40,23 @@ class API(AgentViewable):
             return None
         
         if node.is_resource:
-            v = self.get(agent, query)
-            if not v: 
-                return None
-            return v.view(agent)
+            return self.get(agent, query).view(agent)
         else:
             data : list[JsonLike] = []
             for child in node.children:
+                
                 if child.is_resource:
-                    v = self.get(agent, f"{query}/{child.name}")
-                    if v:
-                        data.append(v.view(agent))
-                else:
+                        data.append(self.get(agent, f"{query}/{child.name}").view(agent))
+                     
+                if len(child.children) == 0:
                     if depth == 0:
                         data.append({
                             "name": child.name,
                             "description": f"Contains {len(child.children)} sub-resources"
                         })
                     else:
-                        data.append(self.search(agent, f"{query}/{child.name}", depth - 1, child))
+                        data.append(self.search(agent, child.name, depth - 1, child))
+                    
             return data
     
     def __update_path_graph__(self, agent: Agent, resource: Resource[Any]):

@@ -33,6 +33,7 @@ def scanner(
             operation=get,
             param_templates=[
                 ParameterTemplate("search", "Search query to filter resources by name", str, required=False),
+                ParameterTemplate("depth", "Depth for recursive search (0 for no recursion)", int, required=False),
             ],
             description="List all resources in the API and filter them by name"
         )
