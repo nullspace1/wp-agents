@@ -14,8 +14,9 @@ if TYPE_CHECKING:
 
 class Event(Generic[D]):
     
-    def __init__(self, resource : Resource[D], operation : Operation[D], operation_type : OperationType, status : OperationStatus, output : Any, parameters : dict[str, Any], agent : 'Agent', exception : Exception | None = None, timestamp : datetime.datetime | None = None):
+    def __init__(self, resource : Resource[D], resource_name : str, operation : Operation[D], operation_type : OperationType, status : OperationStatus, output : Any, parameters : dict[str, Any], agent : 'Agent', exception : Exception | None = None, timestamp : datetime.datetime | None = None):
         self.resource = resource
+        self.resource_name = resource_name
         self.operation = operation
         self.operation_type = operation_type
         self.status = status
@@ -26,8 +27,7 @@ class Event(Generic[D]):
         self.exception = exception
         
     def __str__(self) -> str:
-        resource_view = self.resource.retrieve_agent_view(self.agent)
-        return f"{self.timestamp.isoformat()} - {self.agent.name} performed {self.operation_type.name} on {resource_view['name']} with status {self.status.name}. Parameters: {self.parameters}. Output: {self.output}"
+        return f"{self.timestamp.isoformat()} - {self.agent.get_full_name()} performed {self.operation_type.name} on {self.resource_name} with status {self.status.name}. Parameters: {self.parameters}. Output: {self.output}"
 
 
 class EventListener(ABC, Generic[D]):

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Generic, TYPE_CHECKING, cast
+from typing import Any, Generic, TYPE_CHECKING
 
+from model.auth import  KeySet
 from model.enums import OperationType
 from model.operation import Operation
-from model.permission_level import PermissionLevel
 from model.events import Event, EventEmitter
 from model.types import D
-from model.resource_types import ResourceViewDict
-from model.operation_result import AgentViewable, AgentViewableValue, JsonLike, OperationResult, OperationStatus
+from model.operation_result import AgentViewable, AgentViewableValue, OperationResult, OperationStatus, ResourceViewDict
 
 if TYPE_CHECKING:
     from model.agent import Agent
@@ -20,13 +19,10 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
     def __init__(self, 
                  owner : Agent | None, 
                  group : Group | None, 
-                 type : str,
                  name : str,
                  description : str,
-                 user_permissions : PermissionLevel, 
-                 group_permissions : PermissionLevel, 
-                 other_permissions : PermissionLevel,
                  data : D,
+                 auth_keys : KeySet,
                  get_op : Operation[D] | None = None, 
                  post_op : Operation[D] | None = None,
                  patch_op : Operation[D] | None = None,
@@ -36,7 +32,6 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
         super().__init__()
         self.__name__ : str = name
         self.__description__ : str = description
-        self.__type__ : str  = type
         self.__created_at__ : datetime.datetime = created_at or datetime.datetime.now()
         self.__owner__ : Agent | None = owner
         self.__group__ : Group | None = group
@@ -44,9 +39,7 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
         self.__post_op__ : Operation[D] | None = post_op
         self.__patch_op__ : Operation[D] | None = patch_op
         self.__delete_op__ : Operation[D] | None = delete_op
-        self.__user_permissions__ : PermissionLevel = user_permissions
-        self.__group_permissions__ : PermissionLevel = group_permissions
-        self.__other_permissions__ : PermissionLevel = other_permissions
+        self.__auth_keys__ : KeySet = auth_keys
         self.__last_operation_at__ : dict[str, datetime.datetime | None] = {
             "get": None,
             "post": None,
@@ -57,249 +50,124 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
         self.data : D  = data
     
     def get(self, agent : Agent, params : dict[str, Any] | None = None) -> OperationResult:
-        """Retrieve the full resource contents.
-        
-        Fetches the complete contents of the resource (e.g., file contents, collection tree).
-        Requires GET permission. Emits a SUCCESS or FAILURE event upon completion.
-        
-        Args:
-            agent: The agent performing the operation. Must have GET permission.
-            params: Optional dictionary of parameters to pass to the operation handler.
-        
-        Returns:
-            Any: The full resource contents, which can be of any type depending on the resource (e.g., string for file contents, list of child resources for a collection).
-        
-        Raises:
-            PermissionError: If the user does not have GET permission on this resource.
-            Exception: Any exception raised by the operation handler is re-raised after emitting a FAILURE event.
-        """
-        if not self.__get_op__:
-            raise NotImplementedError("GET operation is not implemented for this resource.")
-        if not self.__verify_permissions__(agent, OperationType.GET):
-            raise PermissionError("You do not have permission to GET this file.")
-        try: 
-            result = self.__normalize_result__(self.__get_op__.execute(self, agent, params or {}))
-            self.__last_operation_at__["get"] = datetime.datetime.now()
-            self.__last_error__ = None
-            self.emit(Event(self, self.__get_op__, OperationType.GET, result["status"], result["output"], params or {}, agent))
-            return result
-        except Exception as e:
-            self.__last_operation_at__["get"] = datetime.datetime.now()
-            self.__last_error__ = str(e)
-            error_output: dict[str, dict[str, str]] = {
-                "exception": {
-                    "type": type(e).__name__,
-                    "message": str(e),
-                }
-            }
-            wrapped_error = self.__normalize_output__(error_output)
-            self.emit(Event(self, self.__get_op__, OperationType.GET, OperationStatus.FAIL, wrapped_error, params or {}, agent, e))
-            return {"status": OperationStatus.FAIL, "output": wrapped_error}
-            
-    def post(self, agent : Agent, params : dict[str, Any]) -> OperationResult:
-        """Add new content to the resource.
-        
-        Appends or adds new content to the resource (e.g., appending to a file or adding 
-        a new resource to a collection). Requires POST permission. Emits a SUCCESS or FAILURE event upon completion.
-        
-        Args:
-            agent: The agent performing the operation. Must have POST permission.
-            params: Dictionary of parameters to pass to the operation handler (required).
-        
-        Returns:
-            Describable: Result of the post operation, which can be of any type depending on the operation handler.
-        
-        Raises:
-            PermissionError: If the user does not have POST permission on this resource.
-            Exception: Any exception raised by the operation handler is re-raised after emitting a FAILURE event.
-        """
-        if not self.__post_op__:
-            raise NotImplementedError("POST operation is not implemented for this resource.")
-        if not self.__verify_permissions__(agent, OperationType.POST):
-            raise PermissionError("You do not have permission to POST to this file.")
+        operation = self.__validate_operation_access__(self.__get_op__, OperationType.GET, agent)
         try:
-            result = self.__normalize_result__(self.__post_op__.execute(self, agent, params))
-            self.__last_operation_at__["post"] = datetime.datetime.now()
-            self.__last_error__ = None
-            self.emit(Event(self, self.__post_op__, OperationType.POST, result["status"], result["output"], params, agent))
-            return result
-        except Exception as e:
-            self.__last_operation_at__["post"] = datetime.datetime.now()
-            self.__last_error__ = str(e)
-            error_output: dict[str, dict[str, str]] = {
-                "exception": {
-                    "type": type(e).__name__,
-                    "message": str(e),
-                }
-            }
-            wrapped_error = self.__normalize_output__(error_output)
-            self.emit(Event(self, self.__post_op__, OperationType.POST, OperationStatus.FAIL, wrapped_error, params, agent, e))
-            return {"status": OperationStatus.FAIL, "output": wrapped_error}
+            return self.__execute_operation__(OperationType.GET, operation, agent, params or {})
+        except Exception as error:
+            return self.__handle_operation_exception__(OperationType.GET, operation, params or {}, agent, error)
+        
+    def post(self, agent : Agent, params : dict[str, Any]) -> OperationResult:
+        operation = self.__validate_operation_access__(self.__post_op__, OperationType.POST, agent)
+        try:
+            return self.__execute_operation__(OperationType.POST, operation, agent, params)
+        except Exception as error:
+            return self.__handle_operation_exception__(OperationType.POST, operation, params, agent, error)
             
     def patch(self, agent : Agent, params : dict[str, Any]) -> OperationResult:
-        """Modify existing content in the resource.
-        
-        Updates or modifies existing content in the resource (e.g., updating file contents 
-        or modifying a resource in a collection). Requires PATCH permission. Emits a SUCCESS or FAILURE event upon completion.
-        
-        Args:
-            agent: The agent performing the operation. Must have PATCH permission.
-            params: Dictionary of parameters to pass to the operation handler (required).
-        
-        Returns:
-            Resource[D]: Result of the patch operation.
-        
-        Raises:
-            PermissionError: If the user does not have PATCH permission on this resource.
-            Exception: Any exception raised by the operation handler is re-raised after emitting a FAILURE event.
-        """
-        if not self.__patch_op__:
-            raise NotImplementedError("PATCH operation is not implemented for this resource.")
-        if not self.__verify_permissions__(agent, OperationType.PATCH):
-            raise PermissionError("You do not have permission to PATCH this file.")
+        operation = self.__validate_operation_access__(self.__patch_op__, OperationType.PATCH, agent)
         try:
-            result = self.__normalize_result__(self.__patch_op__.execute(self, agent, params))
-            self.__last_operation_at__["patch"] = datetime.datetime.now()
-            self.__last_error__ = None
-            self.emit(Event(self, self.__patch_op__, OperationType.PATCH, result["status"], result["output"], params, agent))
-            return result
-        except Exception as e:
-            self.__last_operation_at__["patch"] = datetime.datetime.now()
-            self.__last_error__ = str(e)
-            error_output: dict[str, dict[str, str]] = {
-                "exception": {
-                    "type": type(e).__name__,
-                    "message": str(e),
-                }
-            }
-            wrapped_error = self.__normalize_output__(error_output)
-            self.emit(Event(self, self.__patch_op__, OperationType.PATCH, OperationStatus.FAIL, wrapped_error, params, agent, e))
-            return {"status": OperationStatus.FAIL, "output": wrapped_error}
+            return self.__execute_operation__(OperationType.PATCH, operation, agent, params)
+        except Exception as error:
+            return self.__handle_operation_exception__(OperationType.PATCH, operation, params, agent, error)
             
     def delete(self, agent : Agent, params : dict[str, Any] | None = None) -> OperationResult:
-        """Remove content from the resource.
-        
-        Deletes or removes content from the resource (e.g., deleting a file or removing 
-        a resource from a collection). Requires DELETE permission. Emits a SUCCESS or FAILURE event upon completion.
-        
-        Args:
-            agent: The agent performing the operation. Must have DELETE permission.
-            params: Optional dictionary of parameters to pass to the operation handler.
-        
-        Returns:
-            Resource[Any]: Result of the delete operation, which can be of any type depending on the operation handler.
-        
-        Raises:
-            PermissionError: If the user does not have DELETE permission on this resource.
-            Exception: Any exception raised by the operation handler is re-raised after emitting a FAILURE event.
-        """
-        if not self.__delete_op__:
-            raise NotImplementedError("DELETE operation is not implemented for this resource.")
-        if not self.__verify_permissions__(agent, OperationType.DELETE):
-            raise PermissionError("You do not have permission to DELETE this file.")
+        operation = self.__validate_operation_access__(self.__delete_op__, OperationType.DELETE, agent)
         try:
-            result = self.__normalize_result__(self.__delete_op__.execute(self, agent, params or {}))
-            self.__last_operation_at__["delete"] = datetime.datetime.now()
-            self.__last_error__ = None
-            self.emit(Event(self, self.__delete_op__, OperationType.DELETE, result["status"], result["output"], params or {}, agent))
-            return result
-        except Exception as e:
-            self.__last_operation_at__["delete"] = datetime.datetime.now()
-            self.__last_error__ = str(e)
-            error_output: dict[str, dict[str, str]] = {
-                "exception": {
-                    "type": type(e).__name__,
-                    "message": str(e),
-                }
-            }
-            wrapped_error = self.__normalize_output__(error_output)
-            self.emit(Event(self, self.__delete_op__, OperationType.DELETE, OperationStatus.FAIL, wrapped_error, params or {}, agent, e))
-            return {"status": OperationStatus.FAIL, "output": wrapped_error}
+            return self.__execute_operation__(OperationType.DELETE, operation, agent, params or {})
+        except Exception as error:
+            return self.__handle_operation_exception__(OperationType.DELETE, operation, params or {}, agent, error)
         
-    def view(self, agent : Agent) -> JsonLike:
-        """View basic metadata about the resource.
-        
-        Provides a dictionary representation of the resource's metadata (e.g., name, type, description).
-        Requires at least one of GET, POST, PATCH, or DELETE permissions. Emits a SUCCESS or FAILURE event upon completion.
-        
-        Args:
-            agent: The agent performing the operation. Must have at least one of GET, POST, PATCH, or DELETE permissions.
-        
-        Returns:
-            ResourceViewDict: A dictionary representation of the resource's metadata.
-            
-        Raises:
-            PermissionError: If the user does not have at least one of GET, POST, PATCH, or DELETE permissions on this resource.
-        """
-        if not self.__has_any_permissions__(agent):
-            raise PermissionError("You do not have permission to view this resource.")
-        return ResourceViewDict(
-                name=self.__name__,
-                type=self.__type__,
-                author=self.__owner__.name if self.__owner__ else "None",
-                group=self.__group__.name if self.__group__ else "None",
-                created_at=self.__relative_time_ago__(self.__created_at__),
-                description=self.__description__,
-                operations=self.__options__(),
-                operation_timestamps={
+    def view(self, agent : Agent) -> ResourceViewDict | None:
+        if not self.__has_any_key__(agent):
+            return None
+        return {
+                "name": self.__name__,
+                "created_at": self.__relative_time_ago__(self.__created_at__),
+                "description": self.__description__,
+                "operations": self.__options__(),
+                "operation_timestamps": {
                     key: self.__relative_time_ago__(value) if value else None
                     for key, value in self.__last_operation_at__.items()
                 },
-                last_error=self.__last_error__,
-                permissions={
-                    "user": self.__user_permissions__.get_permissions(),
-                    "group": self.__group_permissions__.get_permissions(),
-                    "other": self.__other_permissions__.get_permissions()
-                    }
-                )
-        
-    def retrieve_agent_view(self, agent : Agent) -> ResourceViewDict:
-        return cast(ResourceViewDict,self.view(agent))
-    
-    def verify(self, agent : Agent, operation : OperationType) -> bool:
-        """Check if agent has permission for a specific operation on this resource. 
-        
-
-        Args:
-            agent: The agent to check permissions for.
-            operation: The operation type to verify (GET, POST, PATCH, DELETE).
-        
-        Returns:
-            bool: True if the agent has permission for the operation, False otherwise.
-        """
-        return self.__verify_permissions__(agent, operation)
-
-    def __normalize_output__(self, output: Any) -> AgentViewable:
-        if isinstance(output, AgentViewable):
-            return output
-        return AgentViewableValue(output)
-
-    def __normalize_result__(self, result: OperationResult) -> OperationResult:
-        return {
-            "status": result["status"],
-            "output": self.__normalize_output__(result["output"]),
+                "last_error": self.__last_error__,
         }
+
+    def __execute_operation__(
+        self,
+        operation_type: OperationType,
+        operation: Operation[D],
+        agent: Agent,
+        params: dict[str, Any],
+    ) -> OperationResult:
+        result = operation.execute(self, agent, params)
+        self.__last_operation_at__[operation_type.value] = datetime.datetime.now()
+        self.__last_error__ = None
+        self.emit(
+            Event(
+                self,
+                self.__name__,
+                operation,
+                operation_type,
+                result["status"],
+                result["output"],
+                params,
+                agent
+            )
+        )
+        return result
+
+    def __validate_operation_access__(
+        self,
+        operation: Operation[D] | None,
+        operation_type: OperationType,
+        agent: Agent,
+    ) -> Operation[D]:
+        if not operation:
+            raise NotImplementedError(f"{operation_type.name} operation is not implemented for this resource.")
+        if not self.__verify_permissions__(agent, operation_type):
+            raise PermissionError(f"You do not have permission to {operation_type.name} this file.")
+        return operation
+
+    def __handle_operation_exception__(
+        self,
+        operation_type: OperationType,
+        operation: Operation[D],
+        params: dict[str, Any],
+        agent: Agent,
+        error: Exception,
+    ) -> OperationResult:
+        self.__last_operation_at__[operation_type.value] = datetime.datetime.now()
+        self.__last_error__ = str(error)
+        wrapped_error = AgentViewableValue(
+            {
+                "exception": {
+                    "type": type(error).__name__,
+                    "message": str(error),
+                }
+            }
+        )
+        self.emit(
+            Event(
+                self,
+                self.__name__,
+                operation,
+                operation_type,
+                OperationStatus.FAIL,
+                wrapped_error,
+                params,
+                agent,
+                error,
+            )
+        )
+        return {"status": OperationStatus.FAIL, "output": wrapped_error}
+
+    def __has_any_key__(self, agent : Agent) -> bool:
+        return any(self.__verify_permissions__(agent, op) for op in OperationType) if self.__auth_keys__ else True
     
     def __verify_permissions__(self, agent : Agent, operation : OperationType) -> bool:
         if agent.is_admin():
             return True
-        if agent == self.__owner__:
-            return self.__user_permissions__.verify(operation)
-        elif self.__group__ is not None and self.__group__ in agent.groups:
-            return self.__group_permissions__.verify(operation)
-        else:
-            return self.__other_permissions__.verify(operation)
-
-    def __has_any_permissions__(self, agent: Agent) -> bool:
-        return any(
-            self.__verify_permissions__(agent, operation)
-            for operation in (
-                OperationType.GET,
-                OperationType.POST,
-                OperationType.PATCH,
-                OperationType.DELETE,
-            )
-        )
+        return  agent.get_auth_key(self, operation) == self.__auth_keys__.get(operation)
 
     def __relative_time_ago__(self, timestamp: datetime.datetime) -> str:
         now = datetime.datetime.now()
@@ -324,9 +192,6 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
         return "0 seconds ago"
     
     def __options__(self) -> dict[str, str]:
-        """
-        Provides a dictionary of available operations and their descriptions for this resource.
-        """
         ops : dict[str, str] = {}
         if self.__get_op__:
             ops["get"] = self.__get_op__.description

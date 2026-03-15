@@ -1,24 +1,29 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional
-from resources.group_messaging import group_messaging
+from typing import TYPE_CHECKING, Any
+
+from model.api import API
+from model.resource import Resource
 
 if TYPE_CHECKING:
     from model.agent import Agent
-    from model.resource import Resource
 
 class Group:
     
-    def __init__(self, uuid : str, name : str, description : str):
+    def __init__(self, uuid : str, name : str, description : str, api : API):
         self.uuid = uuid
         self.name = name
         self.description = description
-        self.members : list['Agent'] = []
-        self.messaging_resource : Optional['Resource[Any]'] = group_messaging(group=self)
+        self.members : list[Agent] = []
+        self.api : API = api
+
+    def add_member(self, agent: 'Agent') -> None:
+        if agent in self.members:
+            return
+        self.members.append(agent)
+        agent.add_api(self.api)
         
-    def add_member(self, agent : 'Agent'):
-        if agent not in self.members:
-            self.members.append(agent)
-            agent.root.post(agent, {"path": f"groups/{self.name}-{self.uuid}/messaging", "resource": self.messaging_resource})
+    def add_resource(self,agent: Agent, resource: Resource[Any]):
+        self.api.mount(agent, resource)
             
-ADMIN = Group(uuid="admin", name="Admin", description="The admin group for the system. Has access to all resources")
+ADMIN = Group(uuid="admin", name="Admin", description="The admin group for the system. Has access to all resources", api=API("admin", "Admin API with access to all resources", []))

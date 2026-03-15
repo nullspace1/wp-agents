@@ -3,21 +3,20 @@ from __future__ import annotations
 import datetime
 import json
 import re
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, cast
 import uuid
 
 from model.agent_provider import AgentProvider
+from model.auth import AuthenticationKey, KeySet
 from model.enums import OperationType
-from model.file_system import FileSystem
+from model.api import API
 from model.group import ADMIN
 from model.message import Message
-from model.operation_result import OperationResult, OperationStatus
-from model.permission_level import PermissionLevel
+from model.operation_result import JsonLike, OperationResult, OperationStatus
 from model.response import Response
+from resources.agent_reply import send_agent_reply
+from resources.scanner import scanner
 from resources.text import text
-from resources.agent_response import send_agent_reply
-from resources.folder import folder
-from resources.list import list_resource
 
 if TYPE_CHECKING:
     from model.resource import Resource
@@ -35,126 +34,90 @@ class Agent:
                  groups : list[Group] | None = None,
                  mounted_resources : list[Resource[Any]] | None = None):
         
-        self.uuid : str = str(uuid.uuid4())
-        self.name : str = name
-        self.description : str = description
-        self.groups : list[Group] = groups or []
-        self.provider : AgentProvider = provider
-        self.information : Resource[str]
-        self.message_history: Resource[list[Message]]
-        self.initial_context : str = initial_context
-        self.current_conversation = ""
-        self.token_limit = token_limit
-        self.tool_usage_instructions = (
+        self.__uuid__ : str = str(uuid.uuid4())
+        self.__name__ : str = name
+        self.__description__ : str = description
+        self.__groups__ : list[Group] = groups or []
+        self.__provider__ : AgentProvider = provider
+        self.__information__ : Resource[str]
+        self.__message_history__: Resource[list[Message]]
+        self.__initial_context__ : str = initial_context
+        self.__current_conversation__ = ""
+        self.__token_limit__ = token_limit
+        self.__tool_usage_instructions__ = (
             tool_usage_instructions or
-            'You may reason freely before issuing a command, but your reply MUST end with a command on its own line '
-            'using EXACTLY the following format:\n\n'
-            '    <operation_type> <resource_name> <json_encoded_parameters>\n\n'
-            '- operation_type: one of "get", "post", "patch", or "delete".\n'
-            '- resource_name: the exact name of a resource available through the agent\'s mounted resources. You may access resources nested within other resources by looking them with "/" separators.\n'
-            '- json_encoded_parameters: a JSON-encoded dictionary of parameters. '
-            'Use {{}} if no parameters are needed.\n\n'
-            'The LAST line of every reply MUST be a valid command in this format. '
-            'Example — to reply to the user with "Hello, how can I help you?": '
-            'post agent_response {{"message": "Hello, how can I help you?"}}'
+            'Your last line must be a command in this exact format:\n\n'
+            '    <operation_type> <api_name>/<resource_path> <json_encoded_parameters>\n\n'
+            'Use one of: get, post, patch, delete. '
+            'Parameters must be a JSON object; use {{}} when empty. '
+            'Example: post <api_name>/agent_response {{"message": "Hello, how can I help you?"}}'
         )
-        
-        self.root = FileSystem(root_resources=[])
+        self.__local_api__ : API = API(f'agent-{self.__name__}-{self.__uuid__}', f"Local API for agent {self.__name__}", [])
+        self.__auth_keys__ : dict[Resource[Any], KeySet] = {}
+        self.__apis__ = set([self.__local_api__])
+
+        for group in self.__groups__:
+            try:
+                self.add_api(group.api)
+            except ValueError:
+                pass
             
         self.__setup__(mounted_resources)
-            
-    def message(self, message: str, agent : Agent | None = None) -> str:
-        self.message_history.data.append(Message(user="user", content=message))
-        self.current_conversation += f"\n[User]: {message}"
 
-        if (self.provider.count_tokens(self.current_conversation) > self.token_limit):
+    def message(self, message: str, agent : Agent | None = None) -> str:
+        self.__message_history__.data.append(Message(user="user", content=message))
+        self.__current_conversation__ += f"\n[User]: {message}"
+
+        if (self.__provider__.count_tokens(self.__current_conversation__) > self.__token_limit__):
             self.__summarize_conversation__()
 
-        response = self.__run_operation_chain__(self.current_conversation)
-        self.message_history.data.append(Message(user=agent.name if agent else self.name, content=response))
-        self.current_conversation += f"\n[{self.name}]: {response}"
+        response = self.__run_operation_chain__(self.__current_conversation__)
+        self.__message_history__.data.append(Message(user=self.__name__, content=response))
+        self.__current_conversation__ += f"\n[{self.__name__}]: {response}"
         return response
 
+    def add_api(self, api: API):
+        if api.name in [existing_api.name for existing_api in self.__apis__]:
+            raise ValueError(f"API with name '{api.name}' is already mounted.")
+        self.__apis__.add(api)
     
-    def mount(self, resource: Resource[Any]):
-        self.root.mount(resource)
-        
+    def mount_locally(self, resource_key_pair: tuple[KeySet, Resource[Any]]):
+        key_set, resource = resource_key_pair
+        self.__auth_keys__[resource] = key_set
+        self.__local_api__.mount(self, resource)
+
 
     def is_admin(self) -> bool:
-        return any(group == ADMIN for group in self.groups)
+        return any(group == ADMIN for group in self.__groups__)
+    
+    def get_auth_key(self, resource : Resource[Any], operation : OperationType) -> AuthenticationKey | None:
+        key_set = self.__auth_keys__.get(resource)
+        if not key_set:
+            return None
+        return key_set.get(operation)
+    
+    def get_full_name(self) -> str:
+        return f"{self.__name__} ({self.__uuid__})"
     
     def __setup__(self, mounted_resources: list[Resource[Any]] | None = None):
-        groups_folder = folder(
-            agent=self,
-            group=None,
-            folder_name="groups",
-            description="Folder containing all the available groups of agents to communicate with",
-            user_permissions=PermissionLevel(get=True, post=False, patch=False, delete=False),
-            group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-            other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-        )
-        self.message_history = list_resource(
-            agent=self,
-            group=None,
-            resource_name="message_history",
-            description="History of messages sent to this agent",
-            user_permissions=PermissionLevel(get=True, post=True, patch=True, delete=True),
-            group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-            other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-            initial_data=[],
-        )
-        self.information = text(
-            agent=self,
-            group=None,
-            text="",
-            resource_name="information",
-            description="A text resource that can be used to store any information this agent wants to keep track of. This can be used by the agent to keep track of important details, such as the user's preferences, or to store any other relevant information that the agent may want to refer to later.",
-            user_permissions=PermissionLevel(get=True, post=True, patch=True, delete=True),
-            group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-            other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-        )
-        self.agent_reply  = send_agent_reply(self)
+        self.mount_locally(send_agent_reply(owner=self))
+        self.mount_locally(scanner(self, self.__local_api__))
         
-        thoughts_folder = folder(
-            agent=self,
-            group=None,
-            folder_name="thoughts",
-            description="Folder containing this agent's reasoning steps, each stored as a text resource",
-            user_permissions=PermissionLevel(get=True, post=False, patch=False, delete=False),
-            group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-            other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-        )
-
-        self.mount(groups_folder)
-        self.mount(thoughts_folder)
-        self.mount(self.message_history)
-        self.mount(self.agent_reply)
-        for resource in mounted_resources or []:
-            self.mount(resource)
-        
-        for group in self.groups:
-            group.add_member(self)
-            
     def __summarize_conversation__(self):
-        summary_prompt = f"Summarize the following conversation between the user and the agent in a concise manner, keeping all important details and information. The summary should be as short as possible while still retaining the key points of the conversation. Conversation: {self.current_conversation}"
+        summary_prompt = f"Summarize the following conversation between the user and the agent in a concise manner, keeping all important details and information. The summary should be as short as possible while still retaining the key points of the conversation. Conversation: {self.__current_conversation__}"
 
         summary_response = self.__run_operation_chain__(summary_prompt)
-        self.current_conversation = f"Summary of previous conversation: {summary_response}"
+        self.__current_conversation__ = f"Summary of previous conversation: {summary_response}"
 
     def __save_thought__(self, reasoning: str) -> None:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        thought = text(
-            agent=self,
-            group=None,
-            resource_name=f"thought_{timestamp}",
-            description=f"Reasoning captured at {timestamp}",
-            user_permissions=PermissionLevel(get=True, post=False, patch=False, delete=False),
-            group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-            other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-            text=reasoning,
-        )
-        self.root.get_resource(self, "thoughts").post(self, {"resource": thought})
-
+        self.mount_locally(text(
+            owner=self,
+            name=f"thoughts/{timestamp}",
+            description=f"Thought recorded at {timestamp}",
+            content=reasoning
+        ))
+        
     def __format_output__(self, output: Any, indent: int = 2) -> str:
         return json.dumps(output, indent=indent, default=str)
 
@@ -162,7 +125,7 @@ class Agent:
         conversation = self.__build_prompt__(prompt)
 
         while True:
-            raw_response = self.provider.send_message(conversation)
+            raw_response = self.__provider__.send_message(conversation)
             match = self._COMMAND_RE.search(raw_response)
             if not match:
                 raise ValueError(f"Invalid response format (no valid command found at end): {raw_response}")
@@ -171,7 +134,7 @@ class Agent:
                 self.__save_thought__(reasoning)
             response = self.__parse_response__(raw_response)
             
-            result = self.__execute__(response.resource, response.operation, response.parameters)
+            result : OperationResult = self.__execute__(response.resource, response.operation, response.parameters)
 
             if result["status"] == OperationStatus.STOP:
                 output_view = result["output"].view(self)
@@ -186,7 +149,7 @@ class Agent:
             )
 
     def __build_prompt__(self, prompt: str) -> str:
-        return self.initial_context + "\n\n" + "You are agent " + self.name + "." + self.tool_usage_instructions + "\n\n" + "Agent's data:\n" + self.__view_root__() + "\n\n" + prompt
+        return self.__initial_context__ + "\n\n" + "You are agent " + self.__name__ + "." + self.__tool_usage_instructions__ + "\n\n" + "Agent's data:\n" + str(self.__view_root__()) + "\n\n" + prompt
                  
     _COMMAND_RE = re.compile(
         r'(get|post|patch|delete)\s+(\S+)\s+(\{.*\})\s*$',
@@ -203,12 +166,30 @@ class Agent:
             parameters=json.loads(match.group(3))
         )
 
-    def __view_root__(self):
-        return self.__format_output__([resource.retrieve_agent_view(self) for resource in self.root.root]) if self.root.root else "empty"
+    def __view_root__(self) -> JsonLike:
+        available_apis = sorted(api.name for api in self.__apis__ if api != self.__local_api__) 
+        return cast(JsonLike, {
+            "available_external_apis": available_apis,
+            "local_api": self.__local_api__.search(self, "", depth=0),
+        })
     
-    def __execute__(self, resource_path: str, operation_type : OperationType, parameters: dict[str, Any]) -> OperationResult:
+    def __execute__(self, resource_identifier: str, operation_type : OperationType, parameters: dict[str, Any]) -> OperationResult:
+        api_name, separator, resource_path = resource_identifier.partition("/")
+
+        if not separator or not resource_path:
+            raise ValueError(
+                "Resource name must include the API name in the format '<api_name>/<resource_path>'."
+            )
+
+        api = next((api for api in self.__apis__ if api.name == api_name), None)
         
-        resource = self.root.get_resource(self, resource_path)
+        if not api:
+            raise ValueError(f"API not found: {api_name}")
+        
+        resource = api.get(self, resource_path)
+        
+        if not resource:
+            raise ValueError(f"Resource not found: {resource_path}")
         
         if operation_type == OperationType.GET:
             return resource.get(self, parameters)

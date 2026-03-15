@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
-from model.resource import Resource
-from model.permission_level import PermissionLevel
+from model.auth import generate_auth_key
+from model.resource import  KeySet, Resource
 from model.operation import Operation
 from model.parameter import ParameterTemplate
 from model.operation_result import AgentViewableValue, OperationResult, OperationStatus
@@ -13,9 +13,7 @@ if TYPE_CHECKING:
 
 
 def post(resource: Resource[None], agent: 'Agent', params: dict[str, Any]) -> OperationResult:
-    """Send a message to the agent and receive a final response"""
     message = params.get("message", "")
-    
     return {
         "status": OperationStatus.STOP,
         "output": AgentViewableValue({
@@ -26,16 +24,14 @@ def post(resource: Resource[None], agent: 'Agent', params: dict[str, Any]) -> Op
 
 def send_agent_reply(
     owner: 'Agent',
-) -> Resource[None]:
-    return Resource[None](
+) -> tuple[KeySet, Resource[None]]:
+    authentication_key = generate_auth_key()
+    return KeySet(post=authentication_key), Resource[None](
         owner=owner,
         group=None,
-        type="agent_response",
         name=f"agent_response",
-        description=f"Allows the agent to return a response. Using this resource will stop the current operation chain and return the provided response to the caller.",
-        user_permissions=PermissionLevel(get=False, post=True, patch=False, delete=False),
-        group_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
-        other_permissions=PermissionLevel(get=False, post=False, patch=False, delete=False),
+        description=f"Return a response to the user.",
+        auth_keys=KeySet(post=authentication_key),
         data=None,
         post_op=Operation['None'](
             operation=post,
@@ -45,3 +41,4 @@ def send_agent_reply(
             description="Send a message to the agent and receive a final response"
         )
     )
+    return authentication_key, resource
