@@ -5,7 +5,7 @@ from model.auth import KeySet, generate_auth_key
 from model.operation import Operation
 from model.operation_result import AgentViewableValue, OperationResult, OperationStatus
 from model.parameter import ParameterTemplate
-from model.resource import Resource
+from model.resource import Resource, ResourceKeyPair
 
 
 def get(resource : Resource[str], agent : Agent, params : dict[str, Any] | None = None) -> OperationResult:
@@ -28,7 +28,7 @@ def text(
     name: str,
     description: str,
     content: str
-) -> tuple[KeySet, Resource[str]]:
+) -> ResourceKeyPair[str]:
     authentication_key = KeySet(get=generate_auth_key(), post=generate_auth_key())
     return authentication_key, Resource[str](
         owner=owner,

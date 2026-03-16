@@ -6,7 +6,7 @@ from model.api import API
 from model.operation import Operation
 from model.operation_result import AgentViewableValue, JsonLike, OperationResult, OperationStatus
 from model.parameter import ParameterTemplate
-from model.resource import Resource
+from model.resource import Resource, ResourceKeyPair
 
 
 def get(resource : Resource[API], agent : Agent, params : dict[str, Any]) -> OperationResult:
@@ -20,7 +20,7 @@ def get(resource : Resource[API], agent : Agent, params : dict[str, Any]) -> Ope
 def scanner(
     owner: Agent,
     api : API
-) -> tuple[KeySet, Resource[API]]:
+) -> ResourceKeyPair[API]:
     keyset = KeySet(get=generate_auth_key())
     return keyset, Resource[API](
         owner=owner,

@@ -18,7 +18,7 @@ from resources.scanner import scanner
 from resources.text import text
 
 if TYPE_CHECKING:
-    from model.resource import Resource
+    from model.resource import Resource, ResourceKeyPair
     from model.group import Group
     
 
@@ -83,7 +83,7 @@ class Agent:
             raise ValueError(f"API with name '{api.name}' is already mounted.")
         self.__apis__.add(api)
     
-    def mount_locally(self, resource_key_pair: tuple[KeySet, Resource[Any]]):
+    def mount_locally(self, resource_key_pair: ResourceKeyPair[Any]):
         key_set, resource = resource_key_pair
         self.__auth_keys__[resource] = key_set
         self.__local_api__.mount(self, resource)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 
 from model.auth import generate_auth_key
-from model.resource import  KeySet, Resource
+from model.resource import KeySet, Resource, ResourceKeyPair
 from model.operation import Operation
 from model.parameter import ParameterTemplate
 from model.operation_result import AgentViewableValue, OperationResult, OperationStatus
@@ -24,7 +24,7 @@ def post(resource: Resource[None], agent: 'Agent', params: dict[str, Any]) -> Op
 
 def send_agent_reply(
     owner: 'Agent',
-) -> tuple[KeySet, Resource[None]]:
+) -> ResourceKeyPair[None]:
     authentication_key = generate_auth_key()
     return KeySet(post=authentication_key), Resource[None](
         owner=owner,
@@ -38,7 +38,7 @@ def send_agent_reply(
             param_templates=[
                 ParameterTemplate("message", "The message to send to the agent", str, required=True),
             ],
-            description="Send a message to the agent and receive a final response"
+            description="Send a message to the user and stops the agent's execution."
         )
     )
     return authentication_key, resource
