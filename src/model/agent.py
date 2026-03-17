@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import json
 import re
-from typing import Any, TYPE_CHECKING, cast
+from typing import Any, TYPE_CHECKING
 import uuid
 
 from model.agent_provider import AgentProvider
@@ -11,7 +11,7 @@ from model.auth import AuthenticationKey, KeySet
 from model.enums import OperationType
 from model.api import API
 from model.group import ADMIN
-from model.operation_result import JsonLike, OperationResult, OperationStatus
+from model.operation_result import Json, OperationResult, OperationStatus
 from model.response import Response
 from resources.agent_reply import send_agent_reply
 from resources.scanner import scanner
@@ -67,6 +67,7 @@ class Agent:
 
         if (len(self.__current_conversation__) == 0):
             self.__current_conversation__ = self.__build_prompt__()
+            
         elif (self.__provider__.count_tokens(self.__current_conversation__) > self.__token_limit__):
             self.__summarize_conversation__()
            
@@ -168,12 +169,12 @@ class Agent:
         )
         return parsed_response, reasoning
 
-    def __view_root__(self) -> JsonLike:
-        available_apis = sorted(api.name for api in self.__apis__ if api != self.__local_api__) 
-        return cast(JsonLike, {
+    def __view_root__(self) -> Json:
+        available_apis : list[str] = sorted(api.name for api in self.__apis__ if api != self.__local_api__) 
+        return {
             "available_external_apis": available_apis,
             "local_api": self.__local_api__.search(self, "", depth=0),
-        })
+        }
     
     def __execute__(self, resource_identifier: str, operation_type : OperationType, parameters: dict[str, Any]) -> OperationResult:
         api_name, separator, resource_path = resource_identifier.partition("/")

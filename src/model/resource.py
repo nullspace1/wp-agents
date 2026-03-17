@@ -8,7 +8,7 @@ from model.enums import OperationType
 from model.operation import Operation
 from model.events import Event, EventEmitter
 from model.types import D
-from model.operation_result import AgentViewable, AgentViewableValue, OperationResult, OperationStatus, ResourceViewDict
+from model.operation_result import AgentViewable, AgentViewableValue, JsonDict, OperationResult, OperationStatus 
 
 if TYPE_CHECKING:
     from model.agent import Agent
@@ -40,13 +40,13 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
         self.__patch_op__ : Operation[D] | None = patch_op
         self.__delete_op__ : Operation[D] | None = delete_op
         self.__auth_keys__ : KeySet = auth_keys
-        self.__last_operation_at__ : dict[str, datetime.datetime | None] = {
-            "get": None,
-            "post": None,
-            "patch": None,
-            "delete": None,
+        self.__last_operation_at__ : dict[str, datetime.datetime | str] = {
+            "get": 'Never',
+            "post": 'Never',
+            "patch": 'Never',
+            "delete": 'Never',
         }
-        self.__last_error__ : str | None = None
+        self.__last_error__ : str = "Never"
         self.data : D  = data
     
     def get(self, agent : Agent, params : dict[str, Any] | None = None) -> OperationResult:
@@ -77,20 +77,21 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
         except Exception as error:
             return self.__handle_operation_exception__(OperationType.DELETE, operation, params or {}, agent, error)
         
-    def view(self, agent : Agent) -> ResourceViewDict | None:
+    def view(self, agent : Agent) -> JsonDict | None:
         if not self.__has_any_key__(agent):
-            return None
-        return {
+            return {}
+        value : JsonDict = {
                 "name": self.__name__,
                 "created_at": self.__relative_time_ago__(self.__created_at__),
                 "description": self.__description__,
                 "operations": self.__options__(),
                 "operation_timestamps": {
-                    key: self.__relative_time_ago__(value) if value else None
+                    key: self.__relative_time_ago__(value)
                     for key, value in self.__last_operation_at__.items()
                 },
                 "last_error": self.__last_error__,
         }
+        return value 
 
     def __execute_operation__(
         self,
@@ -101,7 +102,7 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
     ) -> OperationResult:
         result = operation.execute(self, agent, params)
         self.__last_operation_at__[operation_type.value] = datetime.datetime.now()
-        self.__last_error__ = None
+        self.__last_error__ = ""
         self.emit(
             Event(
                 self,
@@ -169,7 +170,9 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
             return True
         return  agent.get_auth_key(self, operation) == self.__auth_keys__.get(operation)
 
-    def __relative_time_ago__(self, timestamp: datetime.datetime) -> str:
+    def __relative_time_ago__(self, timestamp: datetime.datetime | str) -> str:
+        if isinstance(timestamp, str):
+            return timestamp
         now = datetime.datetime.now()
         delta = now - timestamp
         total_seconds = max(0, int(delta.total_seconds()))
