@@ -19,7 +19,7 @@ class API(AgentViewable):
         self.resources : set[Resource[Any]] = set(resources)
         self.__path_graph__ : APINode = APINode('', [], False)
 
-    def mount(self, agent: Agent, resource: Resource[Any]) -> None:
+    def mount(self, resource: Resource[Any]) -> None:
         self.resources.add(resource)
 
     def get(self, agent : Agent, path : str) -> Resource[Any] | None:
@@ -55,6 +55,18 @@ class API(AgentViewable):
                 data : Json = search_result
                 
             return data
+        
+    def view(self, agent : Agent) -> JsonDict | None:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "root_resources": self.search(agent, "", depth=0) or []
+        }
+        
+    def get_property(self,  agent: Agent, key: str) -> Json | None:
+        value = self.view(agent)
+        if value:
+            return value.get(key)
         
     def __has_visible_resource__(self, agent: Agent, node: APINode) -> bool:
         count = 0
@@ -102,24 +114,3 @@ class API(AgentViewable):
                 return None
             current_node = found_node
         return current_node
-        
-        
-    def view(self, agent : Agent) -> JsonDict | None:
-        return {
-            "name": self.name,
-            "description": self.description,
-            "root_resources": self.search(agent, "", depth=0) or []
-        }
-        
-    def get_property(self,  agent: Agent, key: str) -> Json | None:
-        value = self.view(agent)
-        if value:
-            return value.get(key)
-        
-class Browser:
-    
-    def __init__(self):
-        self.api : dict[str, API] = {}
-        
-    def mount_api(self, name: str, api: API):
-        self.api[name] = api

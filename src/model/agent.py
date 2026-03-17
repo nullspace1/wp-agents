@@ -87,7 +87,7 @@ class Agent:
     def mount_locally(self, resource_key_pair: ResourceKeyPair[Any]):
         key_set, resource = resource_key_pair
         self.__auth_keys__[resource] = key_set
-        self.__local_api__.mount(self, resource)
+        self.__local_api__.mount(resource)
         
     def add_keys_for_resource(self, resource: Resource[Any], key_set: KeySet):
         self.__auth_keys__[resource] = key_set

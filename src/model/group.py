@@ -28,6 +28,6 @@ class Group:
     def add_resource(self,agent: Agent, resource: Resource[Any]):
         if agent not in self.members:
             raise Exception("Agent not in group")
-        self.api.mount(agent, resource)
+        self.api.mount(resource)
             
 ADMIN = Group(uuid="admin", name="Admin", description="The admin group for the system. Has access to all resources", api=API("admin", "Admin API with access to all resources", []), keypairs=[])

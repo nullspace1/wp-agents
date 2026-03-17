@@ -30,20 +30,14 @@ Json: TypeAlias = (
     | list[str]
     | list['Json']
     | dict[str, 'Json']
-    | dict[str, str]
-    | dict[str, dict[str,str]]
-    | dict[str, list[str]]
-    | dict[str, JsonPrimitive]
+    | dict[str, dict[str,'Json']]
+    | dict[str, 'Json']
     | dict[str, list[JsonPrimitive]]
     | dict[str, str | int]
     | ResourceViewDict
 )
 
 JsonDict: TypeAlias = dict[str, Json]
-
-class NamedJsonDict(TypedDict):
-    name: str
-
 
 class AgentViewable(ABC):
     
