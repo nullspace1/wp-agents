@@ -25,7 +25,7 @@ class API(AgentViewable):
     def get(self, agent : Agent, path : str) -> Resource[Any] | None:
         self.__build_path_graph__(agent)
         for resource in self.resources:
-            view  = resource.view(agent) or None
+            view  = resource.view(agent)
             if view and view["name"] == path:
                 return resource
     def search(self, agent : Agent, query : str, depth : int = 0, root_node : APINode | None = None) -> Json:
