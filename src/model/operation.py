@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from typing import Callable, Generic, TYPE_CHECKING, Any
+from typing import Generic, TYPE_CHECKING
 
-from model.parameter import ParameterTemplate
 from model.types import D
 
 if TYPE_CHECKING:
+    from typing import Any, Callable
+
     from model.resource import Resource
     from model.agent import Agent
     from model.operation_result import OperationResult
+    from model.parameter import ParameterTemplate
 
 
 class Operation(Generic[D]):

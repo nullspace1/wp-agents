@@ -1,15 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from model.auth import generate_auth_key
-from model.resource import KeySet, Resource, ResourceKeyPair
+from model.resource import KeySet, Resource
 from model.operation import Operation
 from model.parameter import ParameterTemplate
-from model.operation_result import AgentViewableValue, OperationResult, OperationStatus
+from model.operation_result import AgentViewableValue, OperationStatus
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from model.agent import Agent
+    from model.operation_result import OperationResult
+    from model.resource import ResourceKeyPair
 
 
 def post(resource: Resource[None], agent: 'Agent', params: dict[str, Any]) -> OperationResult:
@@ -20,7 +24,6 @@ def post(resource: Resource[None], agent: 'Agent', params: dict[str, Any]) -> Op
             "response": message,
         })
     }
-
 
 def send_agent_reply(
     owner: 'Agent',

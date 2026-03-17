@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
 
-from model.enums import OperationType
+if TYPE_CHECKING:
+    from typing import Any
+
+    from model.enums import OperationType
 
 
 @dataclass(slots=True)

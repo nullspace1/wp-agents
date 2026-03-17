@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Generic, TYPE_CHECKING
+from typing import Generic, TYPE_CHECKING
 
 from model.auth import  KeySet
 from model.enums import OperationType
-from model.operation import Operation
 from model.events import Event, EventEmitter
 from model.types import D
-from model.operation_result import AgentViewable, AgentViewableValue, OperationResult, OperationStatus, ResourceViewDict 
+from model.operation_result import AgentViewable, AgentViewableValue, OperationStatus
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from model.agent import Agent
     from model.group import Group
+    from model.operation import Operation
+    from model.operation_result import OperationResult
+    from model.types import ResourceViewDict
 
 class Resource(Generic[D], EventEmitter[D], AgentViewable):
     

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from model.api import API
-from model.resource import Resource, ResourceKeyPair
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from model.agent import Agent
+    from model.resource import Resource, ResourceKeyPair
 
 class Group:
     

@@ -1,11 +1,19 @@
-from typing import Any, cast
+from __future__ import annotations
 
-from model.agent import Agent
+from typing import TYPE_CHECKING, cast
+
 from model.auth import KeySet, generate_auth_key
 from model.operation import Operation
-from model.operation_result import AgentViewableValue, OperationResult, OperationStatus
+from model.operation_result import AgentViewableValue, OperationStatus
 from model.parameter import ParameterTemplate
-from model.resource import Resource, ResourceKeyPair
+from model.resource import Resource
+
+if TYPE_CHECKING:
+    from typing import Any
+
+    from model.agent import Agent
+    from model.operation_result import OperationResult
+    from model.resource import ResourceKeyPair
 
 
 def get(resource : Resource[str], agent : Agent, params : dict[str, Any] | None = None) -> OperationResult:
@@ -21,8 +29,7 @@ def post(resource : Resource[str], agent : Agent, params : dict[str, Any]) -> Op
             "status": OperationStatus.CONTINUE,
             "output": AgentViewableValue(resource.data)
     }
-
-    
+  
 def text(
     owner: Agent,
     name: str,

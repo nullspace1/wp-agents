@@ -1,12 +1,20 @@
-from typing import Any
+from __future__ import annotations
 
-from model.agent import Agent
+from typing import TYPE_CHECKING
+
 from model.auth import KeySet, generate_auth_key
 from model.api import API
 from model.operation import Operation
-from model.operation_result import AgentViewableValue, Json, OperationResult, OperationStatus
+from model.operation_result import AgentViewableValue, OperationStatus
 from model.parameter import ParameterTemplate
-from model.resource import Resource, ResourceKeyPair
+from model.resource import Resource
+
+if TYPE_CHECKING:
+    from typing import Any
+
+    from model.agent import Agent
+    from model.operation_result import Json, OperationResult
+    from model.resource import ResourceKeyPair
 
 
 def get(resource : Resource[API], agent : Agent, params : dict[str, Any]) -> OperationResult:

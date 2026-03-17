@@ -3,24 +3,26 @@ from __future__ import annotations
 import datetime
 import json
 import re
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 import uuid
 
-from model.agent_provider import AgentProvider
-from model.auth import AuthenticationKey, KeySet
 from model.enums import OperationType
 from model.api import API
 from model.group import ADMIN
-from model.operation_result import Json, OperationResult, OperationStatus
+from model.operation_result import OperationStatus
 from model.response import Response
 from resources.agent_reply import send_agent_reply
 from resources.scanner import scanner
 from resources.text import text
 
 if TYPE_CHECKING:
-    from model.resource import Resource, ResourceKeyPair
+    from typing import Any
+    from model.agent_provider import AgentProvider
+    from model.auth import AuthenticationKey
+    from model.auth import KeySet
+    from model.operation_result import Json, OperationResult
     from model.group import Group
-    
+    from model.resource import Resource, ResourceKeyPair
 
 class Agent:
     

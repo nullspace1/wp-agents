@@ -1,8 +1,15 @@
-from typing import Any
+from __future__ import annotations
 
-from model.agent import Agent
-from model.operation_result import AgentViewable, Json, JsonDict
-from model.resource import Resource
+from typing import TYPE_CHECKING
+
+from model.operation_result import AgentViewable
+ 
+if TYPE_CHECKING:
+    from typing import Any
+
+    from model.agent import Agent
+    from model.resource import Resource
+    from model.types import Json, JsonDict
 
 class APINode:
     
