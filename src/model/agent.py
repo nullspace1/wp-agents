@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import json
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 import uuid
 
 from model.enums import OperationType
@@ -11,7 +11,7 @@ from model.api import API
 from model.group import ADMIN
 from model.operation_result import OperationStatus
 from model.response import Response
-from model.types import ResourceKeyPair
+from model.types import  ResourceKeyPair
 from resources.agent_reply import send_agent_reply
 from resources.scanner import scanner
 from resources.text import text
@@ -32,6 +32,7 @@ class Agent:
                  description : str, 
                  provider : AgentProvider, 
                  token_limit : int = 3000,
+                 error_handler : Callable[[Json, Agent], OperationStatus] | None = None,
                  groups : list[Group] | None = None,
                  mounted_resources : list[ResourceKeyPair] | None = None,
                  initial_context : str = "", 
@@ -71,6 +72,8 @@ class Agent:
             summarize_prompt or
             "Summarize the following conversation between the user and the agent in a concise manner, keeping all important details and information. The summary should be as short as possible while still retaining the key points of the conversation. Conversation: \n\n {conversation}"
         )
+        
+        self.__error_handler__ = error_handler
 
     def message(self, message: str) -> str:
 
@@ -119,6 +122,7 @@ class Agent:
         self.mount_locally(text(owner=self, name="agent_preloaded_text", description="All text written here will be guaranteed to be available even after summarizing the conversation. Use this to store important information.", content=""))
         for resource_key_pair in (mounted_resources or []):
             self.mount_locally(resource_key_pair)
+            
     def __summarize_conversation__(self):
         summary_response = self.__run_operation_chain__(self.__summarize_prompt_template__)
         self.__current_conversation__ = self.__build_prompt__() + f"\n\nSummary of previous conversation: {summary_response}"
@@ -135,6 +139,7 @@ class Agent:
     def __run_operation_chain__(self, prompt: str) -> str:
 
         while True:
+            
             raw_response = self.__provider__.send_message(prompt)
             parsed_response: Response
             parsed_response, reasoning = self.__parse_response__(raw_response)
@@ -152,7 +157,18 @@ class Agent:
                 return self.__format_output__(output_view)
 
             if result["status"] == OperationStatus.FAIL:
-                raise RuntimeError(self.__format_output__(result["output"].view(self)))
+                if self.__error_handler__:
+                    error : Json | None = result["output"].view(self)
+                    if not error:
+                        error = {"error": "Unknown error occurred."}
+                    error_status = self.__error_handler__(error, self)
+                    if error_status == OperationStatus.STOP:
+                        return "Error handler is stopping execution."
+                    elif error_status == OperationStatus.CONTINUE:
+                        prompt += f"\nThe previous operation resulted in an error: {self.__format_output__(result['output'].view(self))}\nPlease adjust your response and try again."
+                    else:
+                        raise ValueError(f"Invalid status returned by error handler: {error_status}")
+                
 
             self.__conversation__ += (
                 f"\n[Agent]: {raw_response}"
