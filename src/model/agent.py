@@ -11,6 +11,7 @@ from model.api import API
 from model.group import ADMIN
 from model.operation_result import OperationStatus
 from model.response import Response
+from model.types import ResourceKeyPair
 from resources.agent_reply import send_agent_reply
 from resources.scanner import scanner
 from resources.text import text
@@ -22,29 +23,30 @@ if TYPE_CHECKING:
     from model.auth import KeySet
     from model.operation_result import Json, OperationResult
     from model.group import Group
-    from model.resource import Resource, ResourceKeyPair
+    from model.resource import Resource
 
 class Agent:
     
-    def __init__(self, name : str, 
+    def __init__(self, 
+                 name : str, 
                  description : str, 
                  provider : AgentProvider, 
-                 initial_context : str = "", 
-                 tool_usage_instructions : str | None = None,
                  token_limit : int = 3000,
                  groups : list[Group] | None = None,
-                 mounted_resources : list[Resource[Any]] | None = None):
+                 mounted_resources : list[ResourceKeyPair] | None = None,
+                 initial_context : str = "", 
+                 tool_usage_instructions : str | None = None,
+                 summarize_prompt: str | None = None):
         
         self.__uuid__ : str = str(uuid.uuid4())
         self.__name__ : str = name
         self.__description__ : str = description
         self.__groups__ : list[Group] = groups or []
         self.__provider__ : AgentProvider = provider
-        self.__information__ : Resource[str]
         self.__initial_context__ : str = initial_context
-        self.__current_conversation__ = ""
-        self.__token_limit__ = token_limit
-        self.__tool_usage_instructions__ = (
+        self.__current_conversation__ : str = ""
+        self.__token_limit__ : int = token_limit
+        self.__tool_usage_instructions__ : str = (
             tool_usage_instructions or
             'Your last line must be a command in this exact format:\n\n'
             '    <operation_type> <api_name>/<resource_path> <json_encoded_parameters>\n\n'
@@ -54,7 +56,7 @@ class Agent:
         )
         self.__local_api__ : API = API(f'agent-{self.__name__}-{self.__uuid__}', f"Local API for agent {self.__name__}", [])
         self.__auth_keys__ : dict[Resource[Any], KeySet] = {}
-        self.__apis__ = set([self.__local_api__])
+        self.__apis__ : set[API] = set([self.__local_api__])
         self.__conversation__ : str = ""
 
         for group in self.__groups__:
@@ -64,6 +66,11 @@ class Agent:
                 pass
             
         self.__setup__(mounted_resources)
+
+        self.__summarize_prompt_template__ : str = (
+            summarize_prompt or
+            "Summarize the following conversation between the user and the agent in a concise manner, keeping all important details and information. The summary should be as short as possible while still retaining the key points of the conversation. Conversation: \n\n {conversation}"
+        )
 
     def message(self, message: str) -> str:
 
@@ -86,7 +93,7 @@ class Agent:
             raise ValueError(f"API with name '{api.name}' is already mounted.")
         self.__apis__.add(api)
     
-    def mount_locally(self, resource_key_pair: ResourceKeyPair[Any]):
+    def mount_locally(self, resource_key_pair: ResourceKeyPair):
         key_set, resource = resource_key_pair
         self.__auth_keys__[resource] = key_set
         self.__local_api__.mount(resource)
@@ -106,13 +113,14 @@ class Agent:
     def get_full_name(self) -> str:
         return f"{self.__name__} ({self.__uuid__})"
     
-    def __setup__(self, mounted_resources: list[Resource[Any]] | None = None):
+    def __setup__(self, mounted_resources: list[ResourceKeyPair] | None = None):
         self.mount_locally(send_agent_reply(owner=self))
         self.mount_locally(scanner(self, self.__local_api__))
-        
+        self.mount_locally(text(owner=self, name="agent_preloaded_text", description="All text written here will be guaranteed to be available even after summarizing the conversation. Use this to store important information.", content=""))
+        for resource_key_pair in (mounted_resources or []):
+            self.mount_locally(resource_key_pair)
     def __summarize_conversation__(self):
-        summary_prompt = f"Summarize the following conversation between the user and the agent in a concise manner, keeping all important details and information. The summary should be as short as possible while still retaining the key points of the conversation. Conversation: {self.__current_conversation__}"
-        summary_response = self.__run_operation_chain__(summary_prompt)
+        summary_response = self.__run_operation_chain__(self.__summarize_prompt_template__)
         self.__current_conversation__ = self.__build_prompt__() + f"\n\nSummary of previous conversation: {summary_response}"
 
     def __save_thought__(self, reasoning: str) -> None:
@@ -152,7 +160,7 @@ class Agent:
             )
 
     def __build_prompt__(self) -> str:
-        return self.__initial_context__ + "\n\n" + "You are agent " + self.get_full_name() + "." + self.__tool_usage_instructions__ + "\n\n" + "Agent's data:\n" + str(self.__view_root__()) + "\n\n"
+        return self.__initial_context__ + "\n\n" + "You are agent " + self.get_full_name() + "." + self.__tool_usage_instructions__ + "\n\n" + "Overview of available resources:\n" + str(self.__view_root__()) + "\n\n"
                  
     _COMMAND_RE = re.compile(
         r'(get|post|patch|delete)\s+(\S+)\s+(\{.*\})\s*$',

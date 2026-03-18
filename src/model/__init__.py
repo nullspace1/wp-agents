@@ -1,6 +1,6 @@
 from model.agent import Agent
-from model.agent_builder import AgentBuilder
 from model.agent_provider import AgentProvider
 from model.response import Response
+from model.group import Group
 
-__all__ = ["Agent", "AgentBuilder", "AgentProvider", "Response"]
+__all__ = ["Agent", "AgentProvider","Group", "Response"]

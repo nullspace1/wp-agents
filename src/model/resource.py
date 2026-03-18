@@ -208,8 +208,4 @@ class Resource(Generic[D], EventEmitter[D], AgentViewable):
             ops["patch"] = self.__patch_op__.description
         if self.__delete_op__:
             ops["delete"] = self.__delete_op__.description
-        return ops
-
-
-ResourceKeyPair = tuple[KeySet, Resource[D]]
-        
+        return ops        

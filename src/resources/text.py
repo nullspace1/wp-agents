@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
     from model.agent import Agent
     from model.operation_result import OperationResult
-    from model.resource import ResourceKeyPair
+    from model.types import ResourceKeyPair
 
 
 def get(resource : Resource[str], agent : Agent, params : dict[str, Any] | None = None) -> OperationResult:
@@ -35,7 +35,7 @@ def text(
     name: str,
     description: str,
     content: str
-) -> ResourceKeyPair[str]:
+) -> ResourceKeyPair:
     authentication_key = KeySet(get=generate_auth_key(), post=generate_auth_key())
     return authentication_key, Resource[str](
         owner=owner,

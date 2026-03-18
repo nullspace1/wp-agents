@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from model.agent import Agent
     from model.operation_result import Json, OperationResult
-    from model.resource import ResourceKeyPair
+    from model.types import ResourceKeyPair
 
 
 def get(resource : Resource[API], agent : Agent, params : dict[str, Any]) -> OperationResult:
@@ -28,7 +28,7 @@ def get(resource : Resource[API], agent : Agent, params : dict[str, Any]) -> Ope
 def scanner(
     owner: Agent,
     api : API
-) -> ResourceKeyPair[API]:
+) -> ResourceKeyPair:
     keyset = KeySet(get=generate_auth_key())
     return keyset, Resource[API](
         owner=owner,
