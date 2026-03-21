@@ -230,6 +230,15 @@ class Agent:
         try:
             resource : Resource[Any] | None = self.__find_resource__(resource_identifier)
         except (APINotFoundError, ResourceNotFoundError, CommandParsingError) as e:
+            self.__operation_event_emitter__.emit(scheduled_operation_event(
+                resource=None,
+                resource_name=resource_identifier,
+                operation_type=operation_type,
+                parameters=parameters,
+                agent=self,
+                timestamp=datetime.datetime.now(),
+                exception= e
+            ))
             return {
                 "status": OperationStatus.FAIL,
                 "output": AgentViewableValue({"message": "Error occurred while finding resource","error": str(e)})
