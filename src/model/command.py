@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
     from typing import Any
@@ -9,8 +8,7 @@ if TYPE_CHECKING:
     from model.enums import OperationType
 
 
-@dataclass(slots=True)
-class Response:
+class Command(TypedDict):
     resource: str
     operation: OperationType
     parameters: dict[str, Any]

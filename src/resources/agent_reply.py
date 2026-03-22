@@ -6,7 +6,7 @@ from model.auth import generate_auth_key
 from model.resource import KeySet, Resource
 from model.operation import Operation
 from model.parameter import ParameterTemplate
-from model.operation_result import AgentViewableValue, OperationStatus
+from model.operation_result import AgentViewableValue, AgentState
 
 if TYPE_CHECKING:
     from typing import Any
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 def post(resource: Resource[None], agent: 'Agent', params: dict[str, Any]) -> OperationResult:
     message = params.get("message", "")
     return {
-        "status": OperationStatus.STOP,
+        "status": AgentState.STOP,
         "output": AgentViewableValue({
             "message": "Message sent to user.",
             "response": message,

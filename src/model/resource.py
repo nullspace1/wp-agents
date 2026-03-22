@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import datetime
 from typing import Generic, TYPE_CHECKING
 
@@ -7,7 +8,7 @@ from model.auth import  KeySet
 from model.enums import OperationType
 from model.events import EventEmitter, ExecutedOperationEventData, executed_operation_event
 from model.typebar import D
-from model.operation_result import AgentViewable, AgentViewableValue, OperationStatus
+from model.operation_result import AgentViewable, AgentViewableValue, AgentState
 
 
 if TYPE_CHECKING:
@@ -18,6 +19,16 @@ if TYPE_CHECKING:
     from model.operation import Operation
     from model.operation_result import OperationResult
     from model.types import ResourceViewDict
+    
+class Firewall(ABC):
+    
+    def __init__(self, name : str, description : str):
+        self.name : str = name
+        self.description : str = description
+
+    @abstractmethod
+    def check(self, agent: Agent, operation: OperationType, params: dict[str, Any]) -> bool:
+        pass
 
 class Resource(Generic[D], EventEmitter[ExecutedOperationEventData[D]], AgentViewable):
     
@@ -28,11 +39,12 @@ class Resource(Generic[D], EventEmitter[ExecutedOperationEventData[D]], AgentVie
                  description : str,
                  data : D,
                  auth_keys : KeySet,
+                 firewalls : list[Firewall] = [],
+                created_at : datetime.datetime | None = None,
                  get_op : Operation[D] | None = None, 
                  post_op : Operation[D] | None = None,
                  patch_op : Operation[D] | None = None,
-                 delete_op : Operation[D] | None = None,
-                 created_at : datetime.datetime | None = None, 
+                 delete_op : Operation[D] | None = None,                 
                  ):
         super().__init__()
         self.__name__ : str = name
@@ -53,6 +65,7 @@ class Resource(Generic[D], EventEmitter[ExecutedOperationEventData[D]], AgentVie
         }
         self.__last_error__ : str = "Never"
         self.data : D  = data
+        self.__firewalls__ : list[Firewall] = firewalls
     
     def get(self, agent : Agent, params : dict[str, Any] | None = None) -> OperationResult:
         operation = self.__validate_operation_access__(self.__get_op__, OperationType.GET, agent)
@@ -105,6 +118,9 @@ class Resource(Generic[D], EventEmitter[ExecutedOperationEventData[D]], AgentVie
         agent: Agent,
         params: dict[str, Any],
     ) -> OperationResult:
+        if not all(firewall.check(agent, operation_type, params) for firewall in self.__firewalls__):
+            blocked_firewalls = [firewall.name for firewall in self.__firewalls__ if not firewall.check(agent, operation_type, params)]
+            raise PermissionError(f"You are blocked by the following firewalls: {', '.join(blocked_firewalls)}")
         result = operation.execute(self, agent, params)
         self.__last_operation_at__[operation_type.value] = datetime.datetime.now()
         self.__last_error__ = ""
@@ -158,14 +174,14 @@ class Resource(Generic[D], EventEmitter[ExecutedOperationEventData[D]], AgentVie
                 self.__name__,
                 operation,
                 operation_type,
-                OperationStatus.FAIL,
+                AgentState.FAIL,
                 wrapped_error,
                 params,
                 agent,
                 error,
             )
         )
-        return {"status": OperationStatus.FAIL, "output": wrapped_error}
+        return {"status": AgentState.FAIL, "output": wrapped_error}
 
     def __has_any_key__(self, agent : Agent) -> bool:
         return any(self.__verify_permissions__(agent, op) for op in OperationType) if self.__auth_keys__ else True

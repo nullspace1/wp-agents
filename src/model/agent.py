@@ -13,8 +13,8 @@ from model.enums import OperationType
 from model.api import API
 from model.events import AgentMessageEventData, EventEmitter, EventListener, ScheduledOperationEventData, agent_message_event, scheduled_operation_event
 from model.group import ADMIN
-from model.operation_result import AgentViewableValue, OperationStatus
-from model.response import Response
+from model.operation_result import AgentViewableValue, AgentState
+from model.command import Command
 from model.types import  ResourceKeyPair
 from model.message import Message
 from resources.agent_reply import send_agent_reply
@@ -38,7 +38,7 @@ class Agent:
                  description : str, 
                  provider : AgentProvider, 
                  token_limit : int = 3000,
-                 error_handler : Callable[[Agent,Json], OperationStatus] | None = None,
+                 error_handler : Callable[[Agent,Json], AgentState] | None = None,
                  groups : list[Group] | None = None,
                  initial_context : str = "", 
                  tool_usage_instructions : str | None = None,
@@ -84,7 +84,7 @@ class Agent:
             "Summarize the following conversation between the user and the agent in a concise manner, keeping all important details and information. The summary should be as short as possible while still retaining the key points of the conversation. Conversation: \n\n {conversation}"
         )
         
-        self.__error_handler__ : Callable[[Agent,Json], OperationStatus] | None = error_handler
+        self.__error_handler__ : Callable[[Agent,Json], AgentState] | None = error_handler
 
     def message(self, message: str) -> Json:
 
@@ -162,39 +162,37 @@ class Agent:
         while True:
             
             raw_response = self.__provider__.send_message(conversation)
-            parsed_response: Response
-            parsed_response, reasoning = self.__parse_response__(raw_response)
+            parsed_command: Command
+            parsed_command, reasoning = self.__parse_response__(raw_response)
             
             if reasoning:
                 self.__save_thought__(reasoning)
             
             result : OperationResult = self.__execute__(
-                    parsed_response.resource,
-                    parsed_response.operation,
-                    parsed_response.parameters,
+                    parsed_command
                 )
             
             self.__append_to_conversation__(Message(role="agent", content=raw_response))
             
-            if result["status"] == OperationStatus.CONTINUE:
+            if result["status"] == AgentState.CONTINUE:
                 self.__append_to_conversation__(Message(role="system", content=result["output"].view(self) or {"message": "No response from operation."}))
                 
-            elif result["status"] == OperationStatus.STOP:
+            elif result["status"] == AgentState.STOP:
                 output_view = result["output"].view(self)
                 self.__append_to_conversation__(Message(role="system", content=output_view or {"message": "No response from operation."}))
                 return
 
-            elif result["status"] == OperationStatus.FAIL:
+            elif result["status"] == AgentState.FAIL:
                 if self.__error_handler__:
                     error : Json | None = result["output"].view(self)
                     if not error:
                         error = {"error": "Unknown error occurred."}
                     error_status = self.__error_handler__(self, error)
-                    if error_status == OperationStatus.STOP:
+                    if error_status == AgentState.STOP:
                         self.__append_to_conversation__( Message(role="system", content={"message": "Error occurred during operation execution. Returning control to user.", "error": error}))
-                    elif error_status == OperationStatus.CONTINUE:
+                    elif error_status == AgentState.CONTINUE:
                         self.__append_to_conversation__( Message(role="system", content={"message": "Error occurred during operation execution. Continue with the next command.", "error": error}))
-                    elif error_status == OperationStatus.FAIL:
+                    elif error_status == AgentState.FAIL:
                         self.__append_to_conversation__( Message(role="system", content={"message": "Error occurred during operation execution. Stopping agent execution.", "error": error}))
                         raise ValueError(f"Invalid status returned by error handler: {error_status}")
                 return
@@ -206,12 +204,12 @@ class Agent:
         return  Message(
             role="system", content=self.__initial_context__ + "\n\n" + "You are agent " + self.get_full_name() + "." + self.__tool_usage_instructions__ + "\n\n" + "Overview of available resources:\n" + str(self.__view_root__()))
                  
-    def __parse_response__(self, response: str) -> tuple[Response, str]:
+    def __parse_response__(self, response: str) -> tuple[Command, str]:
         match = self._COMMAND_RE.search(response)
         if not match:
             raise ValueError(f"Invalid response format (no valid command found at end): {response}")
         reasoning = response[:match.start()].strip()
-        parsed_response = Response(
+        parsed_response = Command(
             resource=match.group(2),
             operation=OperationType(match.group(1).lower()),
             parameters=json.loads(match.group(3))
@@ -225,44 +223,44 @@ class Agent:
             "local_api": self.__local_api__.search(self, "", depth=0),
         }
     
-    def __execute__(self, resource_identifier: str, operation_type : OperationType, parameters: dict[str, Any]) -> OperationResult:
+    def __execute__(self, parsed_command: Command) -> OperationResult:
        
         try:
-            resource : Resource[Any] | None = self.__find_resource__(resource_identifier)
+            resource : Resource[Any] | None = self.__find_resource__(parsed_command["resource"])
         except (APINotFoundError, ResourceNotFoundError, CommandParsingError) as e:
             self.__operation_event_emitter__.emit(scheduled_operation_event(
                 resource=None,
-                resource_name=resource_identifier,
-                operation_type=operation_type,
-                parameters=parameters,
+                resource_name=parsed_command["resource"],
+                operation_type=parsed_command["operation"],
+                parameters=parsed_command["parameters"],
                 agent=self,
                 timestamp=datetime.datetime.now(),
                 exception= e
             ))
             return {
-                "status": OperationStatus.FAIL,
+                "status": AgentState.FAIL,
                 "output": AgentViewableValue({"message": "Error occurred while finding resource","error": str(e)})
             }
         
         self.__operation_event_emitter__.emit(scheduled_operation_event(
             resource=resource,
-            resource_name=resource_identifier,
-            operation_type=operation_type,
-            parameters=parameters,
+            resource_name=parsed_command["resource"],
+            operation_type=parsed_command["operation"],
+            parameters=parsed_command["parameters"],
             agent=self,
             timestamp=datetime.datetime.now()
         ))
         
-        if operation_type == OperationType.GET:
-            resource.get(self, parameters)
-        elif operation_type == OperationType.POST:
-            resource.post(self, parameters)
-        elif operation_type == OperationType.PATCH:
-            resource.patch(self, parameters)
-        elif operation_type == OperationType.DELETE:
-            resource.delete(self, parameters)
+        if parsed_command["operation"] == OperationType.GET:
+            return resource.get(self, parsed_command["parameters"])
+        elif parsed_command["operation"] == OperationType.POST:
+            return resource.post(self, parsed_command["parameters"])
+        elif parsed_command["operation"] == OperationType.PATCH:
+            return resource.patch(self, parsed_command["parameters"])
+        elif parsed_command["operation"] == OperationType.DELETE:
+            return resource.delete(self, parsed_command["parameters"])
         
-        raise ValueError(f"Unsupported operation type: {operation_type}")
+        raise ValueError(f"Unsupported operation type: {parsed_command['operation']}")
     
     def __find_resource__(self, resource_identifier: str) -> Resource[Any]:
         api_name, separator, resource_path = resource_identifier.partition("/")

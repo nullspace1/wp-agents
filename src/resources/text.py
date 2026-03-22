@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 from model.auth import KeySet, generate_auth_key
 from model.operation import Operation
-from model.operation_result import AgentViewableValue, OperationStatus
+from model.operation_result import AgentViewableValue, AgentState
 from model.parameter import ParameterTemplate
 from model.resource import Resource
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 def get(resource : Resource[str], agent : Agent, params : dict[str, Any] | None = None) -> OperationResult:
     return {
-        "status": OperationStatus.CONTINUE,
+        "status": AgentState.CONTINUE,
         "output": AgentViewableValue(resource.data)
     }
     
@@ -25,7 +25,7 @@ def post(resource : Resource[str], agent : Agent, params : dict[str, Any]) -> Op
     new_content : str = cast(str,params.get("content"))
     resource.data = new_content
     return {
-            "status": OperationStatus.CONTINUE,
+            "status": AgentState.CONTINUE,
             "output": AgentViewableValue({
                 "message": "Text resource updated successfully."
             })

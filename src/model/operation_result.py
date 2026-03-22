@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from model.types import Json
 
 
-class OperationStatus(Enum):
+class AgentState(Enum):
     CONTINUE = 1
     STOP = 2
     FAIL = 3
@@ -29,5 +29,5 @@ class AgentViewableValue(AgentViewable):
         return self.value
 
 class OperationResult(TypedDict):
-    status: OperationStatus
+    status: AgentState
     output: AgentViewable

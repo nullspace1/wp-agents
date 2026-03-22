@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from model.auth import KeySet, generate_auth_key
 from model.api import API
 from model.operation import Operation
-from model.operation_result import AgentViewableValue, OperationStatus
+from model.operation_result import AgentViewableValue, AgentState
 from model.parameter import ParameterTemplate
 from model.resource import Resource
 
@@ -21,7 +21,7 @@ def get(resource : Resource[API], agent : Agent, params : dict[str, Any]) -> Ope
     depth : int = params.get("depth") or 0
     resources : Json = resource.data.search(agent, search_query, depth)
     return {
-        "status": OperationStatus.CONTINUE,
+        "status": AgentState.CONTINUE,
         "output": AgentViewableValue(resources)
     }
     

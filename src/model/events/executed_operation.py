@@ -9,7 +9,7 @@ from .events import Event
 if TYPE_CHECKING:
     from ..agent import Agent
     from ..operation import Operation
-    from ..operation_result import OperationStatus
+    from ..operation_result import AgentState
     from ..resource import Resource
 
 
@@ -18,7 +18,7 @@ class ExecutedOperationEventData(TypedDict, Generic[D]):
     resource_name: str
     operation: 'Operation[D]'
     operation_type: OperationType
-    status: 'OperationStatus'
+    status: 'AgentState'
     output: Any
     parameters: dict[str, Any]
     agent: 'Agent'
@@ -31,7 +31,7 @@ def executed_operation_event(
     resource_name: str,
     operation: "Operation[D]",
     operation_type: OperationType,
-    status: "OperationStatus",
+    status: "AgentState",
     output: Any,
     parameters: dict[str, Any],
     agent: "Agent",
